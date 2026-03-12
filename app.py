@@ -17,6 +17,9 @@ from datetime import datetime
 GREEN_API_ID = os.getenv("GREEN_API_ID")
 GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
 
+print("GREEN_API_ID:", GREEN_API_ID)
+print("GREEN_API_TOKEN:", GREEN_API_TOKEN)
+
 GREEN_API_URL = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendMessage/{GREEN_API_TOKEN}"
 GREEN_API_FILE_URL = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendFileByUrl/{GREEN_API_TOKEN}"
 
