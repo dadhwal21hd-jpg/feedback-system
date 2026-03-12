@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<div class="stats">
+
+<div class="card">
+<h3>Total</h3>
+<p>{{total}}</p>
+</div>
+
+<div class="card">
+<h3>Pending</h3>
+<p>{{pending}}</p>
+</div>
+
+<div class="card">
+<h3>Overdue</h3>
+<p>{{overdue}}</p>
+</div>
+
+<div class="card">
+<h3>Today</h3>
+<p>{{today}}</p>
+</div>
+
+</div>
+<head>
+<title>Feedback Dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Feedback Dashboard</h1>
+
+<form action="/submit" method="post" enctype="multipart/form-data">
+
+<label>Employee</label>
+
+<select name="person" id="employeeSelect">
+
+{% for name in employees %}
+
+<option value="{{name}}">{{name}}</option>
+
+{% endfor %}
+
+</select>
+
+<label>Feedback</label>
+
+<textarea name="message" placeholder="Write feedback"></textarea>
+
+<label>Voice Note</label>
+
+<button type="button" id="recordBtn">🎤 Start Recording</button>
+<button type="button" id="stopBtn">⏹ Stop</button>
+
+<p id="recordStatus"></p>
+
+<input type="file" id="voiceFile" name="voice" hidden>
+
+<button type="submit">Send Feedback</button>
+
+</form>
+
+<h2>Feedback Log</h2>
+<label>Filter by Employee</label>
+
+<select id="employeeFilter">
+
+<option value="all">All</option>
+
+{% for name in employees %}
+<option value="{{name}}">{{name}}</option>
+{% endfor %}
+
+</select>
+<table>
+
+<tr>
+<th>ID</th>
+<th>Employee</th>
+<th>Feedback</th>
+<th>Date</th>
+<th>Action</th>
+</tr>
+
+{% for f in feedback %}
+
+<tr class="{% if f.days > 15 %}red{% endif %}">
+
+<td>{{f.id}}</td>
+<td>{{f.person}}</td>
+<td>{{f.message}}</td>
+<td>{{f.date}}</td>
+
+<td>
+
+<a href="/delete/{{f.id}}">
+<button class="deleteBtn">Delete</button>
+</a>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+<script>
+
+let mediaRecorder;
+let audioChunks = [];
+
+const recordBtn = document.getElementById("recordBtn");
+const stopBtn = document.getElementById("stopBtn");
+const status = document.getElementById("recordStatus");
+const fileInput = document.getElementById("voiceFile");
+
+recordBtn.onclick = async () => {
+
+const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+
+mediaRecorder = new MediaRecorder(stream);
+
+mediaRecorder.start();
+
+status.innerText = "Recording...";
+
+audioChunks = [];
+
+mediaRecorder.ondataavailable = event => {
+audioChunks.push(event.data);
+};
+
+};
+
+stopBtn.onclick = () => {
+
+mediaRecorder.stop();
+
+status.innerText = "Recording stopped";
+
+mediaRecorder.onstop = () => {
+
+const audioBlob = new Blob(audioChunks,{type:'audio/mp3'});
+
+const file = new File([audioBlob],"voice.mp3");
+
+const container = new DataTransfer();
+
+container.items.add(file);
+
+fileInput.files = container.files;
+
+};
+
+};
+
+</script>
+<script>
+
+new TomSelect("#employeeSelect",{
+create:false,
+sortField:{
+field:"text",
+direction:"asc"
+}
+});
+
+</script>
+<script>
+
+const filter = document.getElementById("employeeFilter")
+
+filter.addEventListener("change", function(){
+
+const value = this.value
+const rows = document.querySelectorAll("table tbody tr")
+
+rows.forEach(row => {
+
+const employee = row.children[1].innerText
+
+if(value === "all" || employee === value){
+row.style.display = ""
+}else{
+row.style.display = "none"
+}
+
+})
+
+})
+
+</script>
+</body>
+</html>
