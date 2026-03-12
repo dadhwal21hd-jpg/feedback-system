@@ -3,114 +3,37 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
+
 import sqlite3
 import requests
-from datetime import datetime
 import shutil
 import os
+from datetime import datetime
+
+# -------------------------------
+# ENV VARIABLES (Render)
+# -------------------------------
+
 GREEN_API_ID = os.getenv("GREEN_API_ID")
 GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
+
+GREEN_API_URL = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendMessage/{GREEN_API_TOKEN}"
+GREEN_API_FILE_URL = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendFileByUrl/{GREEN_API_TOKEN}"
+
+# -------------------------------
+# FASTAPI INIT
+# -------------------------------
+
 app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-# -----------------------------
-# GREEN API CONFIG
-# -----------------------------
 
-GREEN_API_URL = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendMessage/{GREEN_API_TOKEN}"
-
-# -----------------------------
-# EMPLOYEE DIRECTORY
-# -----------------------------
-
-EMPLOYEES = {
-
-"Shubhneet Khurana":"919855562123",
-"Pramod":"919454181890",
-"Preeti":"919569888004",
-"Ratti":"919915977885",
-"Kriti Mam":"919876566555",
-"Lalhan Mishra HR":"919417713023",
-"Monty":"919592761974",
-"Raju Ji (Account)":"918728902080",
-"Joshi":"918146474566",
-"Sanjay Mishra":"919990848585",
-"Hari Prakash":"919878051243",
-"Deepak":"919914123301",
-"Mishra Ji":"919417713023",
-"Jyoti Mam":"919815466555",
-"Pathania":"919915025517",
-"Dheeraj":"919915025507",
-"Raja Sir":"919815266555",
-"Pooja":"918360559762",
-"Anil Sharma":"919501501524",
-"Om Dadhwal":"919878019868",
-"Suraj":"916280404745",
-"RAGHAV SIR":"919872166555",
-"Manish":"917009412112",
-"Jyoti Chahuan":"916284179660",
-"Purnima":"917508109704",
-"Dimpy Designer":"917508978054",
-"Ashish Designer":"916307746071",
-"Reetu Designer":"918427316217",
-"Pinky":"919915777055",
-"Sampita Designer":"917973324109",
-"Junaid Designer":"917626964671",
-"AJIT LALU":"919779246668",
-"Garima Designer":"919988093070",
-"Rajshree":"917903732955",
-"Nishu":"918728098983",
-"Vijay":"918677805147",
-"Sonam":"919717411293",
-"Juhi":"919779188296",
-"Amisha":"919718286214",
-"Chanda":"918360777824",
-"Charanjit Sir Ac":"919463532277",
-"Sheelu":"918699261388",
-"Kamal":"917973870083",
-"Archit":"919915184763",
-"Anika":"919779304072",
-"Ritika Verma":"917626864357",
-"Jyoti Mittal":"917973611932",
-"Taniya":"918146918930",
-"Loveleen":"917340712478",
-"Ruhi":"917087099991",
-"Amrendra":"918677805147",
-"Manisha":"918699540589",
-"Nisha":"9176963661015",
-"Sneha":"919814782494",
-"Nisha Singh":"916284179661",
-"Raju":"918728902080",
-"Vishal Bhalla":"919915164202",
-"Tanuja Designer":"918534051443",
-"Sukhdev Master":"919465529426",
-"Sarvesh Master":"919872573254",
-"Kalpana Designer":"919560919628",
-"Rashmi EA":"919915990000",
-"Ram Niwas":"918591624713",
-"Raj Designer":"916283080516",
-"Palak":"917973373732",
-"Muskan":"916283801612",
-"Maluk Master":"918847041709",
-"Madhukar":"916387073378",
-"Kishan Master":"917986869939",
-"Kanhaiya Boiler":"919888030893",
-"Kailash":"919915025514",
-"Khushi":"917986436698",
-"Komal":"918968709850",
-"Monish Designer":"918437599681",
-"Deepak Sangini":"919914123301",
-"Bittu Sir":"919878430000",
-"Deepak CA":"919872588396",
-"Anwar Master":"918360429569"
-
-}
-# -----------------------------
-# DATABASE
-# -----------------------------
+# -------------------------------
+# DATABASE INIT
+# -------------------------------
 
 conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -128,9 +51,97 @@ date TEXT
 
 conn.commit()
 
-# -----------------------------
-# WHATSAPP FUNCTION
-# -----------------------------
+# -------------------------------
+# EMPLOYEE DIRECTORY
+# -------------------------------
+
+EMPLOYEES = {
+
+"Shubhneet Khurana": "919855562123",
+"Pramod": "919454181890",
+"Preeti": "919569888004",
+"Ratti": "919915977885",
+"Kriti Mam": "919876566555",
+"Lalhan Mishra HR": "919417713023",
+"Monty": "919592761974",
+"Raju Ji (Account)": "918728902080",
+"Joshi": "918146474566",
+"Sanjay Mishra": "919990848585",
+"Hari Prakash": "919878051243",
+"Deepak": "919914123301",
+"Mishra Ji": "919417713023",
+"Jyoti Mam": "919815466555",
+"Pathania": "919915025517",
+"Dheeraj": "919915025507",
+"Raja Sir": "919815266555",
+"Pooja": "918360559762",
+"Anil Sharma": "919501501524",
+"Om Dadhwal": "919878019868",
+"Suraj": "916280404745",
+"Raghav Sir": "919872166555",
+"Manish": "917009412112",
+"Jyoti Chauhan": "916284179661",
+"Purnima": "917508109704",
+"Dimpy Designer": "917508978054",
+"Ashish Designer": "916307746071",
+"Reetu Designer": "918427316217",
+"Pinky": "919915777055",
+"Sampita Designer": "917973324109",
+"Junaid Designer": "917626964671",
+"Ajit Lalu": "919779246668",
+"Garima Designer": "919988093070",
+"Rajshree": "917903732955",
+"Nishu": "918728098983",
+"Vijay": "918677805147",
+"Sonam": "919717411293",
+"Juhi": "919779188296",
+"Amisha": "919718286214",
+"Chanda": "918360777824",
+"Charanjit Sir Ac": "919463532277",
+"Sheelu": "918699261388",
+"Kamal": "917973870083",
+"Archit": "919915184763",
+"Anika": "919779304072",
+"Ritika Verma": "917626864357",
+"Jyoti Mittal": "917973611932",
+"Taniya": "918146918930",
+"Loveleen": "917340712478",
+"Ruhi": "917087099991",
+"Amrendra": "918677805147",
+"Manisha": "918699540589",
+"Nisha": "917696366101",
+"Kamal": "917973870083",
+"Sneha": "919814782494",
+"Nisha Singh": "916284179661",
+"Raju": "918728902080",
+"Vishal Bhalla": "919915164202",
+"Tanuja Designer": "918534051443",
+"Sukhdev Master": "919465529426",
+"Sarvesh Master": "919872573254",
+"Kalpana Designer": "919560919628",
+"Rashmi EA": "919915990000",
+"Ram Niwas": "918591624713",
+"Raj Designer": "916283080516",
+"Palak": "917973373732",
+"Muskan": "916283801612",
+"Maluk Master": "918847041709",
+"Madhukar": "916387073378",
+"Kishan Master": "917986869939",
+"Kanhaiya Boiler": "919888030893",
+"Kailash": "919915025514",
+"Khushi": "917986436698",
+"Komal": "918968709850",
+"Monish Designer": "918437599681",
+"Deepak Sangini": "919914123301",
+"Bittu Sir": "919878430000",
+"Deepak CA": "919872588396",
+"Anwar Master": "918360429569"
+
+}
+
+# -------------------------------
+# SEND WHATSAPP TEXT
+# -------------------------------
 
 def send_whatsapp(phone, message):
 
@@ -142,9 +153,12 @@ def send_whatsapp(phone, message):
     response = requests.post(GREEN_API_URL, json=payload)
 
     print("WhatsApp response:", response.text)
-def send_whatsapp_voice(phone, file_url):
 
-    url = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendFileByUrl/{GREEN_API_TOKEN}"
+# -------------------------------
+# SEND WHATSAPP VOICE
+# -------------------------------
+
+def send_whatsapp_voice(phone, file_url):
 
     payload = {
         "chatId": f"{phone}@c.us",
@@ -152,12 +166,14 @@ def send_whatsapp_voice(phone, file_url):
         "fileName": "voice.mp3"
     }
 
-    response = requests.post(url, json=payload)
+    response = requests.post(GREEN_API_FILE_URL, json=payload)
 
     print("Voice response:", response.text)
-# -----------------------------
+
+# -------------------------------
 # HOME PAGE
-# -----------------------------
+# -------------------------------
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
 
@@ -209,15 +225,18 @@ def home(request: Request):
             "today": today_count
         }
     )
-# -----------------------------
+
+# -------------------------------
 # SUBMIT FEEDBACK
-# -----------------------------
+# -------------------------------
 
 @app.post("/submit")
 async def submit_feedback(
+
     person: str = Form(...),
     message: str = Form(...),
     voice: UploadFile = File(None)
+
 ):
 
     phone = EMPLOYEES[person]
@@ -243,10 +262,17 @@ async def submit_feedback(
     send_whatsapp(phone, f"Feedback:\n\n{message}")
 
     if voice_path:
-        voice_url = f"https://feedback-system-1-299j.onrender.com/{voice_path}"
+
+        voice_url = f"https://feedback-system.onrender.com/{voice_path}"
+
         send_whatsapp_voice(phone, voice_url)
 
     return RedirectResponse("/", status_code=303)
+
+# -------------------------------
+# DELETE FEEDBACK
+# -------------------------------
+
 @app.get("/delete/{id}")
 def delete_feedback(id: int):
 
@@ -254,6 +280,3 @@ def delete_feedback(id: int):
     conn.commit()
 
     return RedirectResponse("/", status_code=303)
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=10000)
