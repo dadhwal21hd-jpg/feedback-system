@@ -7,7 +7,9 @@ import sqlite3
 import requests
 from datetime import datetime
 import shutil
-
+import os
+GREEN_API_ID = os.getenv("GREEN_API_ID")
+GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
 app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
@@ -18,7 +20,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # GREEN API CONFIG
 # -----------------------------
 
-GREEN_API_URL = "https://api.green-api.com/waInstance7107518478/sendMessage/e197605d1eb74b76b6d7e6ba8be8582e54f5a03501c94a7c8e"
+GREEN_API_URL = "https://api.green-api.com/waInstance{GREEN_API_ID}/sendMessage/{GREEN_API_TOKEN}"
 
 # -----------------------------
 # EMPLOYEE DIRECTORY
@@ -142,7 +144,7 @@ def send_whatsapp(phone, message):
     print("WhatsApp response:", response.text)
 def send_whatsapp_voice(phone, file_url):
 
-    url = "https://api.green-api.com/waInstance7107518478/sendFileByUrl/e197605d1eb74b76b6d7e6ba8be8582e54f5a03501c94a7c8e"
+    url = "https://api.green-api.com/waInstance{GREEN_API_ID}/sendFileByUrl/{GREEN_API_TOKEN}"
 
     payload = {
         "chatId": f"{phone}@c.us",
@@ -252,3 +254,6 @@ def delete_feedback(id: int):
     conn.commit()
 
     return RedirectResponse("/", status_code=303)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=10000)
