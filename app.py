@@ -20,7 +20,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # GREEN API CONFIG
 # -----------------------------
 
-GREEN_API_URL = "https://api.green-api.com/waInstance{GREEN_API_ID}/sendMessage/{GREEN_API_TOKEN}"
+GREEN_API_URL = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendMessage/{GREEN_API_TOKEN}"
 
 # -----------------------------
 # EMPLOYEE DIRECTORY
@@ -144,7 +144,7 @@ def send_whatsapp(phone, message):
     print("WhatsApp response:", response.text)
 def send_whatsapp_voice(phone, file_url):
 
-    url = "https://api.green-api.com/waInstance{GREEN_API_ID}/sendFileByUrl/{GREEN_API_TOKEN}"
+    url = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendFileByUrl/{GREEN_API_TOKEN}"
 
     payload = {
         "chatId": f"{phone}@c.us",
