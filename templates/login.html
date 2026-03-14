@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login — FeedFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: #f2ece0;
+  background-image:
+    radial-gradient(ellipse at 30% 60%, rgba(180,140,90,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 75% 25%, rgba(160,110,60,0.07) 0%, transparent 50%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-box {
+  background: #faf6ee;
+  border: 1.5px solid #d4c9b5;
+  border-radius: 18px;
+  padding: 48px 44px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 40px rgba(100,70,30,0.13);
+  animation: fadeUp 0.4s ease both;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.login-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  color: #18120a;
+  margin-bottom: 32px;
+}
+.login-logo span { color: #a63d10; font-size: 26px; }
+.login-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #18120a;
+  letter-spacing: -0.6px;
+  margin-bottom: 6px;
+}
+.login-sub {
+  color: #5a4a32;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 30px;
+}
+label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #5a4a32;
+  margin-bottom: 8px;
+}
+input[type="password"] {
+  width: 100%;
+  background: #ede5d8;
+  border: 1.5px solid #d4c9b5;
+  border-radius: 9px;
+  color: #18120a;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 13px 16px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  margin-bottom: 20px;
+  letter-spacing: 2px;
+}
+input[type="password"]:focus {
+  border-color: #a63d10;
+  box-shadow: 0 0 0 3px rgba(166,61,16,0.12);
+}
+button[type="submit"] {
+  width: 100%;
+  background: #a63d10;
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  padding: 14px;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.18s;
+  letter-spacing: 0.2px;
+  box-shadow: 0 4px 16px rgba(166,61,16,0.25);
+}
+button[type="submit"]:hover { background: #8f3309; transform: translateY(-1px); }
+.error-msg {
+  background: #f9eaea;
+  border: 1.5px solid #e8c0c0;
+  border-radius: 8px;
+  color: #b83232;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+}
+.login-footer {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 12px;
+  color: #a0917a;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+</style>
+</head>
+<body>
+  <div class="login-box">
+    <div class="login-logo">
+      <span>◈</span> FeedFlow
+    </div>
+    <h1 class="login-title">Welcome back</h1>
+    <p class="login-sub">Enter your password to access the dashboard.</p>
+
+    {% if error %}
+    <div class="error-msg">⚠ {{ error }}</div>
+    {% endif %}
+
+    <form action="/login" method="post">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" autofocus required>
+      <button type="submit">Enter Dashboard →</button>
+    </form>
+
+    <div class="login-footer">Internal Tool · Restricted Access</div>
+  </div>
+</body>
+</html>
