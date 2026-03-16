@@ -305,12 +305,22 @@ async def submit_feedback(
     voice_path = ""
 
     if voice and voice.filename:
+        import ffmpeg
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = werkzeug.utils.secure_filename(voice.filename) or "voice.mp3"
-        unique_filename = f"{timestamp}_{safe_filename}"
-        voice_path = f"uploads/{unique_filename}"
-        with open(voice_path, "wb") as buf:
+        
+        # Save original file first (whatever format browser sends)
+        raw_path = f"uploads/{timestamp}_raw"
+        with open(raw_path, "wb") as buf:
             shutil.copyfileobj(voice.file, buf)
+        
+        # Convert to proper MP3 using ffmpeg
+        voice_path = f"uploads/{timestamp}_voice.mp3"
+        try:
+            ffmpeg.input(raw_path).output(voice_path, acodec='libmp3lame', ar='44100').run(quiet=True, overwrite_output=True)
+            os.remove(raw_path)  # delete the raw file
+        except Exception as e:
+            logger.error("ffmpeg conversion failed: %s", e)
+            voice_path = raw_path  # fallback to raw if conversion fails
 
     today = datetime.now().strftime("%Y-%m-%d")
 
