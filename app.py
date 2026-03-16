@@ -11,6 +11,7 @@ import os
 import io
 import csv
 import logging
+import hashlib
 from datetime import datetime
 import werkzeug.utils
 
@@ -26,8 +27,8 @@ logger = logging.getLogger(__name__)
 GREEN_API_ID    = os.getenv("GREEN_API_ID")
 GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
 BASE_URL        = os.getenv("BASE_URL", "https://feedback-system-1-299j.onrender.com")
-LOGIN_PASSWORD  = os.getenv("LOGIN_PASSWORD", "admin123")
 SECRET_KEY      = os.getenv("SECRET_KEY", "supersecretkey")
+ADMIN_PASSWORD  = os.getenv("ADMIN_PASSWORD", "admin123")
 
 logger.info("GREEN_API_ID loaded: %s", bool(GREEN_API_ID))
 logger.info("GREEN_API_TOKEN loaded: %s", bool(GREEN_API_TOKEN))
@@ -50,6 +51,16 @@ app.mount("/static",  StaticFiles(directory="static"),  name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # -------------------------------
+# PASSWORD HASHING
+# -------------------------------
+def hash_password(password: str) -> str:
+    salted = f"feedflow_salt_{password}_feedflow"
+    return hashlib.sha256(salted.encode()).hexdigest()
+
+def verify_password(password: str, hashed: str) -> bool:
+    return hash_password(password) == hashed
+
+# -------------------------------
 # DATABASE
 # -------------------------------
 def get_db():
@@ -60,21 +71,20 @@ def get_db():
 def init_db():
     conn = get_db()
 
-    # Main feedback table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            person   TEXT,
-            phone    TEXT,
-            message  TEXT,
-            voice    TEXT,
-            date     TEXT,
-            priority TEXT DEFAULT 'Medium',
-            status   TEXT DEFAULT 'Open'
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            person       TEXT,
+            phone        TEXT,
+            message      TEXT,
+            voice        TEXT,
+            date         TEXT,
+            priority     TEXT DEFAULT 'Medium',
+            status       TEXT DEFAULT 'Open',
+            submitted_by TEXT DEFAULT 'admin'
         )
     """)
 
-    # Settings table — stores key/value pairs like followup_days
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
@@ -82,18 +92,38 @@ def init_db():
         )
     """)
 
-    # Safe migration for existing feedback tables
-    for col, default in [("priority", "'Medium'"), ("status", "'Open'")]:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            username   TEXT UNIQUE NOT NULL,
+            password   TEXT NOT NULL,
+            role       TEXT DEFAULT 'user',
+            created_at TEXT
+        )
+    """)
+
+    # Safe migrations
+    for col, default in [
+        ("priority",     "'Medium'"),
+        ("status",       "'Open'"),
+        ("submitted_by", "'admin'"),
+    ]:
         try:
             conn.execute(f"ALTER TABLE feedback ADD COLUMN {col} TEXT DEFAULT {default}")
             logger.info("Migration: added column %s", col)
         except Exception:
             pass
 
-    # Insert default followup_days if not already set
-    conn.execute("""
-        INSERT OR IGNORE INTO settings(key, value) VALUES('followup_days', '15')
-    """)
+    conn.execute("INSERT OR IGNORE INTO settings(key, value) VALUES('followup_days', '15')")
+
+    # Create default admin if no users exist
+    existing = conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
+    if existing["cnt"] == 0:
+        conn.execute(
+            "INSERT INTO users(username, password, role, created_at) VALUES(?,?,?,?)",
+            ("admin", hash_password(ADMIN_PASSWORD), "admin", datetime.now().strftime("%Y-%m-%d"))
+        )
+        logger.info("Default admin user created")
 
     conn.commit()
     conn.close()
@@ -207,12 +237,28 @@ EMPLOYEES = {
 # -------------------------------
 # AUTH HELPERS
 # -------------------------------
+def get_current_user(request: Request):
+    return request.session.get("username")
+
+def get_current_role(request: Request):
+    return request.session.get("role", "user")
+
 def is_logged_in(request: Request) -> bool:
     return request.session.get("logged_in") is True
+
+def is_admin(request: Request) -> bool:
+    return request.session.get("role") == "admin"
 
 def require_login(request: Request):
     if not is_logged_in(request):
         return RedirectResponse("/login", status_code=302)
+    return None
+
+def require_admin(request: Request):
+    if not is_logged_in(request):
+        return RedirectResponse("/login", status_code=302)
+    if not is_admin(request):
+        return RedirectResponse("/", status_code=302)
     return None
 
 # -------------------------------
@@ -245,42 +291,25 @@ def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request, "error": error})
 
 @app.post("/login")
-def login(request: Request, password: str = Form(...)):
-    if password == LOGIN_PASSWORD:
+def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    conn = get_db()
+    user = conn.execute(
+        "SELECT * FROM users WHERE username=?", (username.strip().lower(),)
+    ).fetchone()
+    conn.close()
+
+    if user and verify_password(password, user["password"]):
         request.session["logged_in"] = True
+        request.session["username"]  = user["username"]
+        request.session["role"]      = user["role"]
         return RedirectResponse("/", status_code=302)
-    return RedirectResponse("/login?error=Wrong+password.+Try+again.", status_code=302)
+
+    return RedirectResponse("/login?error=Wrong+username+or+password.", status_code=302)
 
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=302)
-
-# -------------------------------
-# SETTINGS PAGE
-# -------------------------------
-@app.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request):
-    redir = require_login(request)
-    if redir: return redir
-    followup_days = get_followup_days()
-    saved = request.query_params.get("saved", "")
-    return templates.TemplateResponse("settings.html", {
-        "request":      request,
-        "followup_days": followup_days,
-        "saved":        saved,
-    })
-
-@app.post("/settings")
-def save_settings(request: Request, followup_days: int = Form(...)):
-    redir = require_login(request)
-    if redir: return redir
-
-    # Clamp between 1 and 365 days
-    followup_days = max(1, min(365, followup_days))
-    set_setting("followup_days", str(followup_days))
-    logger.info("Follow-up days updated to: %d", followup_days)
-    return RedirectResponse("/settings?saved=1", status_code=303)
 
 # -------------------------------
 # HOME PAGE
@@ -291,15 +320,23 @@ def home(request: Request):
     if redir: return redir
 
     conn = get_db()
-    rows = conn.execute("SELECT * FROM feedback ORDER BY id DESC").fetchall()
+
+    # Admin sees all feedback, regular users see only their own
+    if is_admin(request):
+        rows = conn.execute("SELECT * FROM feedback ORDER BY id DESC").fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM feedback WHERE submitted_by=? ORDER BY id DESC",
+            (get_current_user(request),)
+        ).fetchall()
+
     conn.close()
 
-    followup_days = get_followup_days()
-
-    feedback_list = []
+    followup_days  = get_followup_days()
     today_str      = datetime.now().strftime("%Y-%m-%d")
     total_feedback = len(rows)
     today_count = overdue = pending = resolved_count = 0
+    feedback_list = []
 
     for r in rows:
         try:
@@ -308,10 +345,10 @@ def home(request: Request):
         except Exception:
             days = 0
 
-        status   = r["status"]   if r["status"]   else "Open"
-        priority = r["priority"] if r["priority"] else "Medium"
+        status       = r["status"]       if r["status"]       else "Open"
+        priority     = r["priority"]     if r["priority"]     else "Medium"
+        submitted_by = r["submitted_by"] if r["submitted_by"] else "—"
 
-        # Auto-flag as Follow Up based on configurable days setting
         if days >= followup_days and status == "Open":
             status = "Follow Up"
 
@@ -326,27 +363,30 @@ def home(request: Request):
             today_count += 1
 
         feedback_list.append({
-            "id":       r["id"],
-            "person":   r["person"],
-            "message":  r["message"],
-            "voice":    r["voice"],
-            "date":     r["date"],
-            "days":     days,
-            "status":   status,
-            "priority": priority,
+            "id":           r["id"],
+            "person":       r["person"],
+            "message":      r["message"],
+            "voice":        r["voice"],
+            "date":         r["date"],
+            "days":         days,
+            "status":       status,
+            "priority":     priority,
+            "submitted_by": submitted_by,
         })
 
     return templates.TemplateResponse("index.html", {
-        "request":      request,
-        "feedback":     feedback_list,
-        "employees":    EMPLOYEES,
-        "total":        total_feedback,
-        "pending":      pending,
-        "overdue":      overdue,
-        "today":        today_count,
-        "resolved":     resolved_count,
+        "request":       request,
+        "feedback":      feedback_list,
+        "employees":     EMPLOYEES,
+        "total":         total_feedback,
+        "pending":       pending,
+        "overdue":       overdue,
+        "today":         today_count,
+        "resolved":      resolved_count,
         "followup_days": followup_days,
-        "now":          datetime.now().strftime("%A, %d %B %Y"),
+        "now":           datetime.now().strftime("%A, %d %B %Y"),
+        "current_user":  get_current_user(request),
+        "current_role":  get_current_role(request),
     })
 
 # -------------------------------
@@ -368,14 +408,15 @@ async def submit_feedback(
     if priority not in ("High", "Medium", "Low"):
         priority = "Medium"
 
-    phone      = EMPLOYEES[person]
-    voice_path = ""
+    phone        = EMPLOYEES[person]
+    voice_path   = ""
+    submitted_by = get_current_user(request) or "unknown"
 
     if voice and voice.filename:
-        timestamp     = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = werkzeug.utils.secure_filename(voice.filename) or "voice.mp3"
+        timestamp       = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename   = werkzeug.utils.secure_filename(voice.filename) or "voice.mp3"
         unique_filename = f"{timestamp}_{safe_filename}"
-        voice_path    = f"uploads/{unique_filename}"
+        voice_path      = f"uploads/{unique_filename}"
         with open(voice_path, "wb") as buf:
             shutil.copyfileobj(voice.file, buf)
 
@@ -383,15 +424,15 @@ async def submit_feedback(
 
     conn = get_db()
     conn.execute(
-        "INSERT INTO feedback(person, phone, message, voice, date, priority, status) VALUES(?,?,?,?,?,?,?)",
-        (person, phone, message, voice_path, today, priority, "Open")
+        "INSERT INTO feedback(person, phone, message, voice, date, priority, status, submitted_by) VALUES(?,?,?,?,?,?,?,?)",
+        (person, phone, message, voice_path, today, priority, "Open", submitted_by)
     )
     conn.commit()
     conn.close()
 
-    followup_days = get_followup_days()
+    followup_days  = get_followup_days()
     priority_emoji = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(priority, "")
-    send_whatsapp(phone, f"📋 Feedback [{priority_emoji} {priority} Priority]:\n\n{message}\n\n⏰ Follow-up due in {followup_days} days if unresolved.")
+    send_whatsapp(phone, f"📋 Feedback [{priority_emoji} {priority} Priority]:\n\n{message}\n\n⏰ Follow-up due in {followup_days} days if unresolved.\n👤 Sent by: {submitted_by}")
 
     if voice_path:
         send_whatsapp_voice(phone, f"{BASE_URL}/{voice_path}")
@@ -456,17 +497,26 @@ def export_csv(request: Request):
     if redir: return redir
 
     conn = get_db()
-    rows = conn.execute(
-        "SELECT id, person, phone, message, date, priority, status FROM feedback ORDER BY id DESC"
-    ).fetchall()
+
+    # Admin exports everything, users export only their own
+    if is_admin(request):
+        rows = conn.execute(
+            "SELECT id, person, phone, message, date, priority, status, submitted_by FROM feedback ORDER BY id DESC"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, person, phone, message, date, priority, status, submitted_by FROM feedback WHERE submitted_by=? ORDER BY id DESC",
+            (get_current_user(request),)
+        ).fetchall()
+
     conn.close()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["ID", "Employee", "Phone", "Message", "Date", "Priority", "Status"])
+    writer.writerow(["ID", "Employee", "Phone", "Message", "Date", "Priority", "Status", "Submitted By"])
     for r in rows:
         writer.writerow([r["id"], r["person"], r["phone"], r["message"],
-                         r["date"], r["priority"], r["status"]])
+                         r["date"], r["priority"], r["status"], r["submitted_by"]])
     output.seek(0)
 
     return StreamingResponse(
@@ -474,3 +524,115 @@ def export_csv(request: Request):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=feedback_export.csv"}
     )
+
+# -------------------------------
+# SETTINGS PAGE (admin only)
+# -------------------------------
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    redir = require_admin(request)
+    if redir: return redir
+
+    conn = get_db()
+    conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+    conn.execute("INSERT OR IGNORE INTO settings(key, value) VALUES('followup_days', '15')")
+    conn.commit()
+    users = conn.execute("SELECT id, username, role, created_at FROM users ORDER BY id").fetchall()
+    conn.close()
+
+    followup_days = get_followup_days()
+    saved  = request.query_params.get("saved", "")
+    error  = request.query_params.get("error", "")
+
+    return templates.TemplateResponse("settings.html", {
+        "request":       request,
+        "followup_days": followup_days,
+        "users":         users,
+        "saved":         saved,
+        "error":         error,
+        "current_user":  get_current_user(request),
+        "current_role":  get_current_role(request),
+    })
+
+@app.post("/settings")
+def save_settings(request: Request, followup_days: int = Form(...)):
+    redir = require_admin(request)
+    if redir: return redir
+    followup_days = max(1, min(365, followup_days))
+    set_setting("followup_days", str(followup_days))
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+# -------------------------------
+# USER MANAGEMENT (admin only)
+# -------------------------------
+@app.post("/users/add")
+def add_user(
+    request:  Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    role:     str = Form("user")
+):
+    redir = require_admin(request)
+    if redir: return redir
+
+    username = username.strip().lower()
+    if not username or not password:
+        return RedirectResponse("/settings?error=Username+and+password+required.", status_code=303)
+    if role not in ("admin", "user"):
+        role = "user"
+
+    try:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO users(username, password, role, created_at) VALUES(?,?,?,?)",
+            (username, hash_password(password), role, datetime.now().strftime("%Y-%m-%d"))
+        )
+        conn.commit()
+        conn.close()
+        return RedirectResponse("/settings?saved=1", status_code=303)
+    except sqlite3.IntegrityError:
+        return RedirectResponse("/settings?error=Username+already+exists.", status_code=303)
+
+@app.post("/users/delete/{id}")
+def delete_user(request: Request, id: int):
+    redir = require_admin(request)
+    if redir: return redir
+
+    conn = get_db()
+    user = conn.execute("SELECT username FROM users WHERE id=?", (id,)).fetchone()
+    if user and user["username"] == get_current_user(request):
+        conn.close()
+        return RedirectResponse("/settings?error=You+cannot+delete+your+own+account.", status_code=303)
+
+    admins = conn.execute("SELECT COUNT(*) as cnt FROM users WHERE role='admin'").fetchone()
+    target = conn.execute("SELECT role FROM users WHERE id=?", (id,)).fetchone()
+    if target and target["role"] == "admin" and admins["cnt"] <= 1:
+        conn.close()
+        return RedirectResponse("/settings?error=Cannot+delete+the+last+admin.", status_code=303)
+
+    conn.execute("DELETE FROM users WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+@app.post("/users/change-password")
+def change_password(
+    request:      Request,
+    old_password: str = Form(...),
+    new_password: str = Form(...),
+):
+    redir = require_login(request)
+    if redir: return redir
+
+    username = get_current_user(request)
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+
+    if not user or not verify_password(old_password, user["password"]):
+        conn.close()
+        return RedirectResponse("/settings?error=Current+password+is+wrong.", status_code=303)
+
+    conn.execute("UPDATE users SET password=? WHERE username=?", (hash_password(new_password), username))
+    conn.commit()
+    conn.close()
+    return RedirectResponse("/settings?saved=1", status_code=303)
