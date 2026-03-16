@@ -73,15 +73,16 @@ def init_db():
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            person       TEXT,
-            phone        TEXT,
-            message      TEXT,
-            voice        TEXT,
-            date         TEXT,
-            priority     TEXT DEFAULT 'Medium',
-            status       TEXT DEFAULT 'Open',
-            submitted_by TEXT DEFAULT 'admin'
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            person        TEXT,
+            phone         TEXT,
+            message       TEXT,
+            voice         TEXT,
+            date          TEXT,
+            priority      TEXT DEFAULT 'Medium',
+            status        TEXT DEFAULT 'Open',
+            submitted_by  TEXT DEFAULT 'admin',
+            followup_days INTEGER DEFAULT 15
         )
     """)
 
@@ -102,11 +103,12 @@ def init_db():
         )
     """)
 
-    # Safe migrations
+    # Safe migrations for existing databases
     for col, default in [
-        ("priority",     "'Medium'"),
-        ("status",       "'Open'"),
-        ("submitted_by", "'admin'"),
+        ("priority",      "'Medium'"),
+        ("status",        "'Open'"),
+        ("submitted_by",  "'admin'"),
+        ("followup_days", "15"),
     ]:
         try:
             conn.execute(f"ALTER TABLE feedback ADD COLUMN {col} TEXT DEFAULT {default}")
@@ -320,8 +322,6 @@ def home(request: Request):
     if redir: return redir
 
     conn = get_db()
-
-    # Admin sees all feedback, regular users see only their own
     if is_admin(request):
         rows = conn.execute("SELECT * FROM feedback ORDER BY id DESC").fetchall()
     else:
@@ -329,12 +329,11 @@ def home(request: Request):
             "SELECT * FROM feedback WHERE submitted_by=? ORDER BY id DESC",
             (get_current_user(request),)
         ).fetchall()
-
     conn.close()
 
-    followup_days  = get_followup_days()
-    today_str      = datetime.now().strftime("%Y-%m-%d")
-    total_feedback = len(rows)
+    global_followup = get_followup_days()
+    today_str        = datetime.now().strftime("%Y-%m-%d")
+    total_feedback   = len(rows)
     today_count = overdue = pending = resolved_count = 0
     feedback_list = []
 
@@ -349,12 +348,18 @@ def home(request: Request):
         priority     = r["priority"]     if r["priority"]     else "Medium"
         submitted_by = r["submitted_by"] if r["submitted_by"] else "—"
 
-        if days >= followup_days and status == "Open":
+        # Use per-feedback followup_days, fall back to global setting
+        try:
+            fu_days = int(r["followup_days"]) if r["followup_days"] else global_followup
+        except Exception:
+            fu_days = global_followup
+
+        if days >= fu_days and status == "Open":
             status = "Follow Up"
 
         if status == "Resolved":
             resolved_count += 1
-        elif days >= followup_days:
+        elif days >= fu_days:
             overdue += 1
         else:
             pending += 1
@@ -372,6 +377,7 @@ def home(request: Request):
             "status":       status,
             "priority":     priority,
             "submitted_by": submitted_by,
+            "followup_days": fu_days,
         })
 
     return templates.TemplateResponse("index.html", {
@@ -383,7 +389,7 @@ def home(request: Request):
         "overdue":       overdue,
         "today":         today_count,
         "resolved":      resolved_count,
-        "followup_days": followup_days,
+        "followup_days": global_followup,
         "now":           datetime.now().strftime("%A, %d %B %Y"),
         "current_user":  get_current_user(request),
         "current_role":  get_current_role(request),
@@ -394,11 +400,12 @@ def home(request: Request):
 # -------------------------------
 @app.post("/submit")
 async def submit_feedback(
-    request:  Request,
-    person:   str        = Form(...),
-    message:  str        = Form(...),
-    priority: str        = Form("Medium"),
-    voice:    UploadFile = File(None)
+    request:      Request,
+    person:       str        = Form(...),
+    message:      str        = Form(...),
+    priority:     str        = Form("Medium"),
+    followup_days: int       = Form(15),
+    voice:        UploadFile = File(None)
 ):
     redir = require_login(request)
     if redir: return redir
@@ -407,6 +414,7 @@ async def submit_feedback(
         raise HTTPException(status_code=400, detail="Invalid employee")
     if priority not in ("High", "Medium", "Low"):
         priority = "Medium"
+    followup_days = max(1, min(365, followup_days))
 
     phone        = EMPLOYEES[person]
     voice_path   = ""
@@ -424,15 +432,19 @@ async def submit_feedback(
 
     conn = get_db()
     conn.execute(
-        "INSERT INTO feedback(person, phone, message, voice, date, priority, status, submitted_by) VALUES(?,?,?,?,?,?,?,?)",
-        (person, phone, message, voice_path, today, priority, "Open", submitted_by)
+        "INSERT INTO feedback(person, phone, message, voice, date, priority, status, submitted_by, followup_days) VALUES(?,?,?,?,?,?,?,?,?)",
+        (person, phone, message, voice_path, today, priority, "Open", submitted_by, followup_days)
     )
     conn.commit()
     conn.close()
 
-    followup_days  = get_followup_days()
     priority_emoji = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(priority, "")
-    send_whatsapp(phone, f"📋 Feedback [{priority_emoji} {priority} Priority]:\n\n{message}\n\n⏰ Follow-up due in {followup_days} days if unresolved.\n👤 Sent by: {submitted_by}")
+    send_whatsapp(phone,
+        f"📋 Feedback [{priority_emoji} {priority} Priority]:\n\n"
+        f"{message}\n\n"
+        f"⏰ Follow-up due in {followup_days} days if unresolved.\n"
+        f"👤 Sent by: {submitted_by}"
+    )
 
     if voice_path:
         send_whatsapp_voice(phone, f"{BASE_URL}/{voice_path}")
@@ -497,26 +509,23 @@ def export_csv(request: Request):
     if redir: return redir
 
     conn = get_db()
-
-    # Admin exports everything, users export only their own
     if is_admin(request):
         rows = conn.execute(
-            "SELECT id, person, phone, message, date, priority, status, submitted_by FROM feedback ORDER BY id DESC"
+            "SELECT id, person, phone, message, date, priority, status, submitted_by, followup_days FROM feedback ORDER BY id DESC"
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, person, phone, message, date, priority, status, submitted_by FROM feedback WHERE submitted_by=? ORDER BY id DESC",
+            "SELECT id, person, phone, message, date, priority, status, submitted_by, followup_days FROM feedback WHERE submitted_by=? ORDER BY id DESC",
             (get_current_user(request),)
         ).fetchall()
-
     conn.close()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["ID", "Employee", "Phone", "Message", "Date", "Priority", "Status", "Submitted By"])
+    writer.writerow(["ID", "Employee", "Phone", "Message", "Date", "Priority", "Status", "Submitted By", "Follow Up Days"])
     for r in rows:
         writer.writerow([r["id"], r["person"], r["phone"], r["message"],
-                         r["date"], r["priority"], r["status"], r["submitted_by"]])
+                         r["date"], r["priority"], r["status"], r["submitted_by"], r["followup_days"]])
     output.seek(0)
 
     return StreamingResponse(
