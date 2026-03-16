@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Settings — FeedFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f2ece0;
+  --surface: #faf6ee;
+  --surface2: #ede5d8;
+  --border: #d4c9b5;
+  --accent: #a63d10;
+  --accent-light: #f5e6df;
+  --danger: #b83232;
+  --danger-light: #f9eaea;
+  --success: #2e6e35;
+  --success-light: #e6f4e8;
+  --text: #18120a;
+  --text-muted: #5a4a32;
+  --text-dim: #a0917a;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --sidebar-w: 230px;
+  --shadow: 0 2px 12px rgba(100,70,30,0.10);
+  --shadow-lg: 0 6px 32px rgba(100,70,30,0.13);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(180,140,90,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(160,110,60,0.06) 0%, transparent 50%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+  color: var(--text);
+  display: flex;
+  min-height: 100vh;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.65;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1.5px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 28px 0;
+  position: fixed; top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  box-shadow: 2px 0 16px rgba(100,70,30,0.07);
+}
+.sidebar-logo {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 24px 26px;
+  border-bottom: 1.5px solid var(--border);
+  font-family: var(--font-display);
+  font-weight: 800; font-size: 19px; color: var(--text);
+}
+.logo-icon { color: var(--accent); font-size: 22px; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 3px; padding: 18px 12px; flex: 1; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  color: var(--text-muted); text-decoration: none;
+  font-weight: 700; font-size: 13.5px; transition: all 0.18s;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: var(--accent-light); color: var(--accent); }
+.nav-icon { font-size: 14px; width: 18px; text-align: center; }
+.nav-logout { color: var(--danger) !important; }
+.nav-logout:hover { background: var(--danger-light) !important; }
+.sidebar-footer { padding: 0 24px; font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+
+/* MAIN */
+.main { margin-left: var(--sidebar-w); flex: 1; padding: 38px 44px; max-width: 700px; }
+
+/* HEADER */
+.page-header { margin-bottom: 34px; padding-bottom: 28px; border-bottom: 1.5px solid var(--border); }
+.page-title { font-family: var(--font-display); font-size: 34px; font-weight: 800; letter-spacing: -1.2px; color: var(--text); }
+.page-subtitle { color: var(--text-muted); margin-top: 5px; font-size: 14px; font-weight: 600; }
+
+/* CARD */
+.card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 30px; margin-bottom: 20px; box-shadow: var(--shadow); animation: fadeUp 0.4s ease both; }
+.section-title { font-family: var(--font-display); font-size: 17px; font-weight: 800; margin-bottom: 6px; color: var(--text); }
+.section-desc { font-size: 13px; color: var(--text-muted); font-weight: 600; margin-bottom: 24px; }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+/* FORM */
+.form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.form-label { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted); }
+.form-label span { color: var(--text-dim); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 12px; margin-left: 6px; }
+
+/* NUMBER INPUT with +/- controls */
+.number-control {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: fit-content;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface2);
+}
+.num-btn {
+  width: 44px; height: 44px;
+  background: var(--surface2);
+  border: none;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.num-btn:hover { background: var(--border); color: var(--text); }
+.num-input {
+  width: 80px;
+  text-align: center;
+  border: none;
+  border-left: 1.5px solid var(--border);
+  border-right: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  padding: 8px 4px;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.helper-text { font-size: 12.5px; color: var(--text-dim); font-weight: 600; margin-top: 10px; }
+
+/* PRESETS */
+.presets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.preset-btn {
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.preset-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+.preset-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+/* SAVE BUTTON */
+.btn-save {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 14px 32px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.18s;
+  box-shadow: 0 4px 16px rgba(166,61,16,0.25);
+  margin-top: 8px;
+}
+.btn-save:hover { background: #8f3309; transform: translateY(-1px); }
+
+/* SUCCESS TOAST */
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--success-light);
+  border: 1.5px solid #a8d8b0;
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-weight: 700;
+  color: var(--success);
+  animation: fadeUp 0.3s ease both;
+}
+
+/* CURRENT VALUE DISPLAY */
+.current-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-light);
+  border: 1.5px solid #e8c4b0;
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-left: 10px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; padding: 20px 16px; max-width: 100vw; }
+}
+</style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">◈</span>
+      <span class="logo-text">FeedFlow</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/"         class="nav-item"><span class="nav-icon">✦</span> Submit</a>
+      <a href="/#log-section" class="nav-item"><span class="nav-icon">◎</span> Log</a>
+      <a href="/export"   class="nav-item"><span class="nav-icon">↓</span> Export CSV</a>
+      <a href="/settings" class="nav-item active"><span class="nav-icon">⚙</span> Settings</a>
+      <a href="/logout"   class="nav-item nav-logout"><span class="nav-icon">⏻</span> Logout</a>
+    </nav>
+    <div class="sidebar-footer">Internal Tool</div>
+  </aside>
+
+  <main class="main">
+
+    <header class="page-header">
+      <h1 class="page-title">Settings</h1>
+      <p class="page-subtitle">Configure how FeedFlow behaves</p>
+    </header>
+
+    {% if saved %}
+    <div class="toast">
+      ✔ Settings saved successfully!
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="section-title">
+        Follow-up Threshold
+        <span class="current-badge">Currently: {{ followup_days }} days</span>
+      </div>
+      <p class="section-desc">
+        Feedback older than this many days will automatically get a <strong>⚑ Follow Up</strong> tag if still Open.
+      </p>
+
+      <form action="/settings" method="post">
+        <div class="form-group">
+          <label class="form-label">
+            Days until Follow Up
+            <span>(between 1 and 365)</span>
+          </label>
+
+          <div class="number-control">
+            <button type="button" class="num-btn" onclick="changeVal(-1)">−</button>
+            <input type="number" name="followup_days" id="followupDays"
+                   class="num-input" value="{{ followup_days }}" min="1" max="365" required>
+            <button type="button" class="num-btn" onclick="changeVal(1)">+</button>
+          </div>
+
+          <p class="helper-text" id="helperText">Loading...</p>
+        </div>
+
+        <!-- Quick presets -->
+        <div class="form-group">
+          <label class="form-label">Quick Presets</label>
+          <div class="presets">
+            <button type="button" class="preset-btn" onclick="setVal(7)">7 days</button>
+            <button type="button" class="preset-btn" onclick="setVal(10)">10 days</button>
+            <button type="button" class="preset-btn" onclick="setVal(15)">15 days</button>
+            <button type="button" class="preset-btn" onclick="setVal(20)">20 days</button>
+            <button type="button" class="preset-btn" onclick="setVal(30)">30 days</button>
+            <button type="button" class="preset-btn" onclick="setVal(45)">45 days</button>
+            <button type="button" class="preset-btn" onclick="setVal(60)">60 days</button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-save">Save Settings →</button>
+      </form>
+    </div>
+
+  </main>
+
+<script>
+const input = document.getElementById("followupDays");
+const helper = document.getElementById("helperText");
+
+function updateHelper() {
+  const v = parseInt(input.value) || 15;
+  const weeks = (v / 7).toFixed(1);
+  if (v === 1)       helper.innerText = "Feedback will be flagged after just 1 day.";
+  else if (v <= 7)   helper.innerText = `Feedback flagged after ${v} days (${weeks} week).`;
+  else if (v <= 30)  helper.innerText = `Feedback flagged after ${v} days (~${weeks} weeks).`;
+  else               helper.innerText = `Feedback flagged after ${v} days (~${(v/30).toFixed(1)} months).`;
+
+  // Highlight matching preset
+  document.querySelectorAll(".preset-btn").forEach(btn => {
+    btn.classList.toggle("active", parseInt(btn.textContent) === v);
+  });
+}
+
+function changeVal(delta) {
+  let v = parseInt(input.value) || 15;
+  v = Math.max(1, Math.min(365, v + delta));
+  input.value = v;
+  updateHelper();
+}
+
+function setVal(v) {
+  input.value = v;
+  updateHelper();
+}
+
+input.addEventListener("input", updateHelper);
+updateHelper(); // run on load
+</script>
+</body>
+</html>

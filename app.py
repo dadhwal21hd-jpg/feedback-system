@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 GREEN_API_ID    = os.getenv("GREEN_API_ID")
 GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
 BASE_URL        = os.getenv("BASE_URL", "https://feedback-system-1-299j.onrender.com")
-LOGIN_PASSWORD  = os.getenv("LOGIN_PASSWORD", "admin123")    # Set this in Render env vars!
-SECRET_KEY      = os.getenv("SECRET_KEY", "supersecretkey") # Set this in Render env vars!
+LOGIN_PASSWORD  = os.getenv("LOGIN_PASSWORD", "admin123")
+SECRET_KEY      = os.getenv("SECRET_KEY", "supersecretkey")
 
 logger.info("GREEN_API_ID loaded: %s", bool(GREEN_API_ID))
 logger.info("GREEN_API_TOKEN loaded: %s", bool(GREEN_API_TOKEN))
@@ -59,6 +59,8 @@ def get_db():
 
 def init_db():
     conn = get_db()
+
+    # Main feedback table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,17 +73,53 @@ def init_db():
             status   TEXT DEFAULT 'Open'
         )
     """)
-    # Safe migration: add columns to existing databases
+
+    # Settings table — stores key/value pairs like followup_days
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+
+    # Safe migration for existing feedback tables
     for col, default in [("priority", "'Medium'"), ("status", "'Open'")]:
         try:
             conn.execute(f"ALTER TABLE feedback ADD COLUMN {col} TEXT DEFAULT {default}")
             logger.info("Migration: added column %s", col)
         except Exception:
-            pass  # Already exists
+            pass
+
+    # Insert default followup_days if not already set
+    conn.execute("""
+        INSERT OR IGNORE INTO settings(key, value) VALUES('followup_days', '15')
+    """)
+
     conn.commit()
     conn.close()
 
 init_db()
+
+# -------------------------------
+# SETTINGS HELPERS
+# -------------------------------
+def get_setting(key: str, default: str = "") -> str:
+    conn = get_db()
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+def set_setting(key: str, value: str):
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES(?,?)", (key, value))
+    conn.commit()
+    conn.close()
+
+def get_followup_days() -> int:
+    try:
+        return int(get_setting("followup_days", "15"))
+    except ValueError:
+        return 15
 
 # -------------------------------
 # EMPLOYEE DIRECTORY
@@ -197,7 +235,7 @@ def send_whatsapp_voice(phone, file_url):
         logger.error("WhatsApp voice send failed: %s", e)
 
 # -------------------------------
-# LOGIN PAGE
+# LOGIN
 # -------------------------------
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
@@ -219,6 +257,32 @@ def logout(request: Request):
     return RedirectResponse("/login", status_code=302)
 
 # -------------------------------
+# SETTINGS PAGE
+# -------------------------------
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    redir = require_login(request)
+    if redir: return redir
+    followup_days = get_followup_days()
+    saved = request.query_params.get("saved", "")
+    return templates.TemplateResponse("settings.html", {
+        "request":      request,
+        "followup_days": followup_days,
+        "saved":        saved,
+    })
+
+@app.post("/settings")
+def save_settings(request: Request, followup_days: int = Form(...)):
+    redir = require_login(request)
+    if redir: return redir
+
+    # Clamp between 1 and 365 days
+    followup_days = max(1, min(365, followup_days))
+    set_setting("followup_days", str(followup_days))
+    logger.info("Follow-up days updated to: %d", followup_days)
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+# -------------------------------
 # HOME PAGE
 # -------------------------------
 @app.get("/", response_class=HTMLResponse)
@@ -230,8 +294,10 @@ def home(request: Request):
     rows = conn.execute("SELECT * FROM feedback ORDER BY id DESC").fetchall()
     conn.close()
 
+    followup_days = get_followup_days()
+
     feedback_list = []
-    today_str     = datetime.now().strftime("%Y-%m-%d")
+    today_str      = datetime.now().strftime("%Y-%m-%d")
     total_feedback = len(rows)
     today_count = overdue = pending = resolved_count = 0
 
@@ -245,13 +311,13 @@ def home(request: Request):
         status   = r["status"]   if r["status"]   else "Open"
         priority = r["priority"] if r["priority"] else "Medium"
 
-        # Auto-flag as Follow Up if 15+ days old and still Open
-        if days >= 15 and status == "Open":
+        # Auto-flag as Follow Up based on configurable days setting
+        if days >= followup_days and status == "Open":
             status = "Follow Up"
 
         if status == "Resolved":
             resolved_count += 1
-        elif days >= 15:
+        elif days >= followup_days:
             overdue += 1
         else:
             pending += 1
@@ -271,15 +337,16 @@ def home(request: Request):
         })
 
     return templates.TemplateResponse("index.html", {
-        "request":   request,
-        "feedback":  feedback_list,
-        "employees": EMPLOYEES,
-        "total":     total_feedback,
-        "pending":   pending,
-        "overdue":   overdue,
-        "today":     today_count,
-        "resolved":  resolved_count,
-        "now":       datetime.now().strftime("%A, %d %B %Y"),
+        "request":      request,
+        "feedback":     feedback_list,
+        "employees":    EMPLOYEES,
+        "total":        total_feedback,
+        "pending":      pending,
+        "overdue":      overdue,
+        "today":        today_count,
+        "resolved":     resolved_count,
+        "followup_days": followup_days,
+        "now":          datetime.now().strftime("%A, %d %B %Y"),
     })
 
 # -------------------------------
@@ -305,22 +372,12 @@ async def submit_feedback(
     voice_path = ""
 
     if voice and voice.filename:
-        import ffmpeg
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # Save original file first (whatever format browser sends)
-        raw_path = f"uploads/{timestamp}_raw"
-        with open(raw_path, "wb") as buf:
+        timestamp     = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename = werkzeug.utils.secure_filename(voice.filename) or "voice.mp3"
+        unique_filename = f"{timestamp}_{safe_filename}"
+        voice_path    = f"uploads/{unique_filename}"
+        with open(voice_path, "wb") as buf:
             shutil.copyfileobj(voice.file, buf)
-        
-        # Convert to proper MP3 using ffmpeg
-        voice_path = f"uploads/{timestamp}_voice.mp3"
-        try:
-            ffmpeg.input(raw_path).output(voice_path, acodec='libmp3lame', ar='44100').run(quiet=True, overwrite_output=True)
-            os.remove(raw_path)  # delete the raw file
-        except Exception as e:
-            logger.error("ffmpeg conversion failed: %s", e)
-            voice_path = raw_path  # fallback to raw if conversion fails
 
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -332,8 +389,9 @@ async def submit_feedback(
     conn.commit()
     conn.close()
 
+    followup_days = get_followup_days()
     priority_emoji = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(priority, "")
-    send_whatsapp(phone, f"📋 Feedback [{priority_emoji} {priority} Priority]:\n\n{message}")
+    send_whatsapp(phone, f"📋 Feedback [{priority_emoji} {priority} Priority]:\n\n{message}\n\n⏰ Follow-up due in {followup_days} days if unresolved.")
 
     if voice_path:
         send_whatsapp_voice(phone, f"{BASE_URL}/{voice_path}")
