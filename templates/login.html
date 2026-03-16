@@ -27,7 +27,7 @@ body {
   border-radius: 18px;
   padding: 48px 44px;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   box-shadow: 0 8px 40px rgba(100,70,30,0.13);
   animation: fadeUp 0.4s ease both;
 }
@@ -36,40 +36,18 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 .login-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   font-family: 'Syne', sans-serif;
-  font-weight: 800;
-  font-size: 22px;
-  color: #18120a;
+  font-weight: 800; font-size: 22px; color: #18120a;
   margin-bottom: 32px;
 }
 .login-logo span { color: #a63d10; font-size: 26px; }
-.login-title {
-  font-family: 'Syne', sans-serif;
-  font-size: 26px;
-  font-weight: 800;
-  color: #18120a;
-  letter-spacing: -0.6px;
-  margin-bottom: 6px;
-}
-.login-sub {
-  color: #5a4a32;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 30px;
-}
-label {
-  display: block;
-  font-size: 11.5px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: #5a4a32;
-  margin-bottom: 8px;
-}
-input[type="password"] {
+.login-title { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; color: #18120a; letter-spacing: -0.6px; margin-bottom: 6px; }
+.login-sub { color: #5a4a32; font-size: 14px; font-weight: 600; margin-bottom: 28px; }
+
+.form-group { margin-bottom: 18px; }
+label { display: block; font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: #5a4a32; margin-bottom: 8px; }
+input[type="text"], input[type="password"] {
   width: 100%;
   background: #ede5d8;
   border: 1.5px solid #d4c9b5;
@@ -81,13 +59,10 @@ input[type="password"] {
   padding: 13px 16px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
-  margin-bottom: 20px;
-  letter-spacing: 2px;
 }
-input[type="password"]:focus {
-  border-color: #a63d10;
-  box-shadow: 0 0 0 3px rgba(166,61,16,0.12);
-}
+input[type="password"] { letter-spacing: 2px; }
+input:focus { border-color: #a63d10; box-shadow: 0 0 0 3px rgba(166,61,16,0.12); }
+
 button[type="submit"] {
   width: 100%;
   background: #a63d10;
@@ -100,10 +75,11 @@ button[type="submit"] {
   font-weight: 800;
   cursor: pointer;
   transition: all 0.18s;
-  letter-spacing: 0.2px;
   box-shadow: 0 4px 16px rgba(166,61,16,0.25);
+  margin-top: 6px;
 }
 button[type="submit"]:hover { background: #8f3309; transform: translateY(-1px); }
+
 .error-msg {
   background: #f9eaea;
   border: 1.5px solid #e8c0c0;
@@ -114,33 +90,29 @@ button[type="submit"]:hover { background: #8f3309; transform: translateY(-1px); 
   padding: 10px 14px;
   margin-bottom: 18px;
 }
-.login-footer {
-  text-align: center;
-  margin-top: 22px;
-  font-size: 12px;
-  color: #a0917a;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
+.login-footer { text-align: center; margin-top: 22px; font-size: 12px; color: #a0917a; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 </style>
 </head>
 <body>
   <div class="login-box">
-    <div class="login-logo">
-      <span>◈</span> FeedFlow
-    </div>
+    <div class="login-logo"><span>◈</span> FeedFlow</div>
     <h1 class="login-title">Welcome back</h1>
-    <p class="login-sub">Enter your password to access the dashboard.</p>
+    <p class="login-sub">Sign in to access the dashboard.</p>
 
     {% if error %}
     <div class="error-msg">⚠ {{ error }}</div>
     {% endif %}
 
     <form action="/login" method="post">
-      <label for="password">Password</label>
-      <input type="password" id="password" name="password" placeholder="••••••••" autofocus required>
-      <button type="submit">Enter Dashboard →</button>
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="Enter your username" autofocus required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit">Sign In →</button>
     </form>
 
     <div class="login-footer">Internal Tool · Restricted Access</div>
