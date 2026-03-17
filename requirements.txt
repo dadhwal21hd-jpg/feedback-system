@@ -7,3 +7,4 @@ werkzeug
 itsdangerous
 # v2
 ffmpeg-python
+psycopg2-binary
