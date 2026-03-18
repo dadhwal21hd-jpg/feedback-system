@@ -6,8 +6,7 @@ from starlette.requests import Request
 from starlette.middleware.sessions import SessionMiddleware
 import psycopg2
 import psycopg2.extras
-from urllib.parse import urlparse
-import requests
+import requests as req
 import shutil
 import os
 import io
@@ -19,45 +18,44 @@ import werkzeug.utils
 import cloudinary
 import cloudinary.uploader
 
-# ========================
-# CLOUDINARY SETUP
-# ========================
-cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET")
-)
-
-# ========================
+# -------------------------------
 # LOGGING
-# ========================
+# -------------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ========================
+# -------------------------------
 # ENV VARIABLES
-# ========================
+# -------------------------------
 GREEN_API_ID    = os.getenv("GREEN_API_ID")
 GREEN_API_TOKEN = os.getenv("GREEN_API_TOKEN")
-BASE_URL        = os.getenv("BASE_URL", "https://feedback-system-1-299j.onrender.com")
+BASE_URL        = os.getenv("BASE_URL", "https://feedback-system-jdy8.onrender.com")
 SECRET_KEY      = os.getenv("SECRET_KEY", "supersecretkey")
 ADMIN_PASSWORD  = os.getenv("ADMIN_PASSWORD", "admin123")
 DATABASE_URL    = os.getenv("DATABASE_URL")
 
-logger.info("GREEN_API_ID loaded: %s", bool(GREEN_API_ID))
-logger.info("GREEN_API_TOKEN loaded: %s", bool(GREEN_API_TOKEN))
-logger.info("DATABASE_URL loaded: %s", bool(DATABASE_URL))
-logger.info("Cloudinary configured: %s", bool(os.getenv("CLOUDINARY_CLOUD_NAME")))
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY    = os.getenv("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
 
-if not DATABASE_URL:
-    raise Exception("DATABASE_URL environment variable is not set!")
+# Configure Cloudinary
+cloudinary.config(
+    cloud_name = CLOUDINARY_CLOUD_NAME,
+    api_key    = CLOUDINARY_API_KEY,
+    api_secret = CLOUDINARY_API_SECRET,
+    secure     = True
+)
+
+logger.info("GREEN_API_ID loaded: %s", bool(GREEN_API_ID))
+logger.info("DATABASE_URL loaded: %s", bool(DATABASE_URL))
+logger.info("CLOUDINARY loaded: %s", bool(CLOUDINARY_CLOUD_NAME))
 
 GREEN_API_URL      = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendMessage/{GREEN_API_TOKEN}"
 GREEN_API_FILE_URL = f"https://api.green-api.com/waInstance{GREEN_API_ID}/sendFileByUrl/{GREEN_API_TOKEN}"
 
-# ========================
+# -------------------------------
 # FASTAPI INIT
-# ========================
+# -------------------------------
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
@@ -69,26 +67,9 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static",  StaticFiles(directory="static"),  name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# ========================
-# DATABASE CONNECTION
-# ========================
-def get_db():
-    """Get a new PostgreSQL connection"""
-    try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-        conn.set_session(autocommit=False)
-        return conn
-    except Exception as e:
-        logger.error(f"Database connection failed: {e}")
-        raise
-
-def dict_cursor(conn):
-    """Execute query and return results as dictionaries"""
-    return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-# ========================
+# -------------------------------
 # PASSWORD HASHING
-# ========================
+# -------------------------------
 def hash_password(password: str) -> str:
     salted = f"feedflow_salt_{password}_feedflow"
     return hashlib.sha256(salted.encode()).hexdigest()
@@ -96,116 +77,118 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return hash_password(password) == hashed
 
-# ========================
-# DATABASE INITIALIZATION
-# ========================
+# -------------------------------
+# DATABASE (PostgreSQL)
+# -------------------------------
+def get_db():
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = False
+    return conn
+
 def init_db():
-    """Initialize PostgreSQL database with required tables"""
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
+    conn = get_db()
+    cur = conn.cursor()
 
-        # Create feedback table
-        cur.execute("""
+    # Feedback table
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
-            id SERIAL PRIMARY KEY,
-            person TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            message TEXT,
-            voice TEXT,
-            images TEXT,
-            date DATE NOT NULL,
-            priority TEXT DEFAULT 'Medium',
-            status TEXT DEFAULT 'Open',
-            submitted_by TEXT DEFAULT 'admin',
+            id            SERIAL PRIMARY KEY,
+            person        TEXT,
+            phone         TEXT,
+            message       TEXT,
+            voice         TEXT,
+            date          TEXT,
+            priority      TEXT DEFAULT 'Medium',
+            status        TEXT DEFAULT 'Open',
+            submitted_by  TEXT DEFAULT 'admin',
             followup_days INTEGER DEFAULT 15,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            image_url     TEXT DEFAULT ''
         )
-        """)
+    """)
 
-        # Create settings table
-        cur.execute("""
+    # Settings table
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
+            key   TEXT PRIMARY KEY,
             value TEXT
         )
-        """)
+    """)
 
-        # Create users table
-        cur.execute("""
+    # Users table
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT DEFAULT 'user',
-            created_at DATE DEFAULT CURRENT_DATE
+            id         SERIAL PRIMARY KEY,
+            username   TEXT UNIQUE NOT NULL,
+            password   TEXT NOT NULL,
+            role       TEXT DEFAULT 'user',
+            created_at TEXT
         )
-        """)
+    """)
 
-        # Insert default settings if not exist
+    # Images table — separate section for standalone image uploads
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS images (
+            id           SERIAL PRIMARY KEY,
+            title        TEXT,
+            image_url    TEXT,
+            public_id    TEXT,
+            uploaded_by  TEXT,
+            uploaded_at  TEXT
+        )
+    """)
+
+    # Safe migrations for feedback table
+    for col, col_type in [
+        ("priority",      "TEXT DEFAULT 'Medium'"),
+        ("status",        "TEXT DEFAULT 'Open'"),
+        ("submitted_by",  "TEXT DEFAULT 'admin'"),
+        ("followup_days", "INTEGER DEFAULT 15"),
+        ("image_url",     "TEXT DEFAULT ''"),
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE feedback ADD COLUMN IF NOT EXISTS {col} {col_type}")
+        except Exception as e:
+            logger.warning("Migration warning for %s: %s", col, e)
+
+    # Default settings
+    cur.execute("INSERT INTO settings(key, value) VALUES('followup_days', '15') ON CONFLICT (key) DO NOTHING")
+
+    # Create default admin if no users exist
+    cur.execute("SELECT COUNT(*) FROM users")
+    count = cur.fetchone()[0]
+    if count == 0:
         cur.execute(
-            "INSERT INTO settings(key, value) VALUES(%s, %s) ON CONFLICT (key) DO NOTHING",
-            ("followup_days", "15")
+            "INSERT INTO users(username, password, role, created_at) VALUES(%s,%s,%s,%s)",
+            ("admin", hash_password(ADMIN_PASSWORD), "admin", datetime.now().strftime("%Y-%m-%d"))
         )
+        logger.info("Default admin user created")
 
-        # Check if admin exists
-        cur.execute("SELECT COUNT(*) FROM users WHERE role='admin'")
-        admin_count = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
 
-        if admin_count == 0:
-            cur.execute(
-                "INSERT INTO users(username, password, role, created_at) VALUES(%s, %s, %s, CURRENT_DATE)",
-                ("admin", hash_password(ADMIN_PASSWORD), "admin")
-            )
-            logger.info("Default admin user created")
+init_db()
 
-        conn.commit()
-        cur.close()
-        conn.close()
-        logger.info("Database initialized successfully")
-
-    except Exception as e:
-        logger.error(f"Database initialization error: {e}")
-        raise
-
-# Initialize database on startup
-try:
-    init_db()
-except Exception as e:
-    logger.error(f"Failed to initialize database: {e}")
-
-# ========================
+# -------------------------------
 # SETTINGS HELPERS
-# ========================
+# -------------------------------
 def get_setting(key: str, default: str = "") -> str:
-    """Get a setting from the database"""
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("SELECT value FROM settings WHERE key=%s", (key,))
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return row[0] if row else default
-    except Exception as e:
-        logger.error(f"Error getting setting: {e}")
-        return default
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM settings WHERE key=%s", (key,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row[0] if row else default
 
 def set_setting(key: str, value: str):
-    """Set a setting in the database"""
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute(
-            "INSERT INTO settings(key, value) VALUES(%s, %s) ON CONFLICT (key) DO UPDATE SET value=%s",
-            (key, value, value)
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-        logger.info(f"Setting {key} saved: {value}")
-    except Exception as e:
-        logger.error(f"Error setting value: {e}")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO settings(key, value) VALUES(%s,%s) ON CONFLICT (key) DO UPDATE SET value=%s",
+                (key, value, value))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 def get_followup_days() -> int:
     try:
@@ -213,59 +196,9 @@ def get_followup_days() -> int:
     except ValueError:
         return 15
 
-# ========================
-# CLOUDINARY FUNCTIONS
-# ========================
-def upload_to_cloudinary(file: UploadFile) -> str:
-    """
-    Upload image to Cloudinary
-    Returns the secure URL of the uploaded image
-    """
-    try:
-        # Read file content
-        content = file.file.read()
-        file.file.seek(0)
-        
-        # Upload to Cloudinary
-        result = cloudinary.uploader.upload(
-            file.file,
-            folder="feedflow/feedback",
-            resource_type="image",
-            quality="auto",
-            fetch_format="auto",
-            secure=True
-        )
-        
-        logger.info(f"Image uploaded to Cloudinary: {result['public_id']}")
-        return result['secure_url']
-    
-    except Exception as e:
-        logger.error(f"Cloudinary upload failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Image upload failed: {str(e)}")
-
-def upload_voice_to_cloudinary(file: UploadFile) -> str:
-    """
-    Upload voice note to Cloudinary
-    Returns the secure URL of the uploaded file
-    """
-    try:
-        result = cloudinary.uploader.upload(
-            file.file,
-            folder="feedflow/voices",
-            resource_type="auto",
-            secure=True
-        )
-        
-        logger.info(f"Voice uploaded to Cloudinary: {result['public_id']}")
-        return result['secure_url']
-    
-    except Exception as e:
-        logger.error(f"Cloudinary voice upload failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Voice upload failed: {str(e)}")
-
-# ========================
+# -------------------------------
 # EMPLOYEE DIRECTORY
-# ========================
+# -------------------------------
 EMPLOYEES = {
     "Shubhneet Khurana": "919855562123",
     "Pramod": "919454181890",
@@ -346,9 +279,9 @@ EMPLOYEES = {
     "Anwar Master": "918360429569",
 }
 
-# ========================
+# -------------------------------
 # AUTH HELPERS
-# ========================
+# -------------------------------
 def get_current_user(request: Request):
     return request.session.get("username")
 
@@ -373,32 +306,58 @@ def require_admin(request: Request):
         return RedirectResponse("/", status_code=302)
     return None
 
-# ========================
+# -------------------------------
 # WHATSAPP HELPERS
-# ========================
+# -------------------------------
 def send_whatsapp(phone, message):
     try:
         payload = {"chatId": f"{phone}@c.us", "message": message}
-        r = requests.post(GREEN_API_URL, json=payload, timeout=10)
+        r = req.post(GREEN_API_URL, json=payload, timeout=10)
         logger.info("WhatsApp text sent, status: %s", r.status_code)
     except Exception as e:
         logger.error("WhatsApp send failed: %s", e)
 
-def send_whatsapp_file(phone, file_url, file_type="image"):
+def send_whatsapp_voice(phone, file_url):
     try:
-        if file_type == "voice":
-            payload = {"chatId": f"{phone}@c.us", "urlFile": file_url, "fileName": "voice.mp3"}
-        else:
-            payload = {"chatId": f"{phone}@c.us", "urlFile": file_url, "fileName": "feedback_image.jpg"}
-        
-        r = requests.post(GREEN_API_FILE_URL, json=payload, timeout=10)
-        logger.info("WhatsApp %s sent, status: %s", file_type, r.status_code)
+        payload = {"chatId": f"{phone}@c.us", "urlFile": file_url, "fileName": "voice.mp3"}
+        r = req.post(GREEN_API_FILE_URL, json=payload, timeout=10)
+        logger.info("WhatsApp voice sent, status: %s", r.status_code)
     except Exception as e:
-        logger.error("WhatsApp %s send failed: %s", file_type, e)
+        logger.error("WhatsApp voice send failed: %s", e)
 
-# ========================
+def send_whatsapp_image(phone, image_url, caption=""):
+    try:
+        payload = {
+            "chatId": f"{phone}@c.us",
+            "urlFile": image_url,
+            "fileName": "image.jpg",
+            "caption": caption
+        }
+        r = req.post(GREEN_API_FILE_URL, json=payload, timeout=10)
+        logger.info("WhatsApp image sent, status: %s", r.status_code)
+    except Exception as e:
+        logger.error("WhatsApp image send failed: %s", e)
+
+# -------------------------------
+# CLOUDINARY UPLOAD HELPER
+# -------------------------------
+def upload_to_cloudinary(file_bytes, filename: str, folder: str = "feedflow"):
+    try:
+        result = cloudinary.uploader.upload(
+            file_bytes,
+            folder=folder,
+            public_id=f"{folder}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}",
+            overwrite=True,
+            resource_type="image"
+        )
+        return result.get("secure_url"), result.get("public_id")
+    except Exception as e:
+        logger.error("Cloudinary upload failed: %s", e)
+        return None, None
+
+# -------------------------------
 # LOGIN
-# ========================
+# -------------------------------
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     if is_logged_in(request):
@@ -408,132 +367,123 @@ def login_page(request: Request):
 
 @app.post("/login")
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("SELECT * FROM users WHERE username=%s", (username.strip().lower(),))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM users WHERE username=%s", (username.strip().lower(),))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
 
-        if user and verify_password(password, user["password"]):
-            request.session["logged_in"] = True
-            request.session["username"]  = user["username"]
-            request.session["role"]      = user["role"]
-            return RedirectResponse("/", status_code=302)
+    if user and verify_password(password, user["password"]):
+        request.session["logged_in"] = True
+        request.session["username"]  = user["username"]
+        request.session["role"]      = user["role"]
+        return RedirectResponse("/", status_code=302)
 
-        return RedirectResponse("/login?error=Wrong+username+or+password.", status_code=302)
-    except Exception as e:
-        logger.error(f"Login error: {e}")
-        return RedirectResponse("/login?error=Database+error.", status_code=302)
+    return RedirectResponse("/login?error=Wrong+username+or+password.", status_code=302)
 
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=302)
 
-# ========================
+# -------------------------------
 # HOME PAGE
-# ========================
+# -------------------------------
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     redir = require_login(request)
     if redir: return redir
 
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        
-        if is_admin(request):
-            cur.execute("SELECT * FROM feedback ORDER BY id DESC")
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    if is_admin(request):
+        cur.execute("SELECT * FROM feedback ORDER BY id DESC")
+    else:
+        cur.execute("SELECT * FROM feedback WHERE submitted_by=%s ORDER BY id DESC",
+                    (get_current_user(request),))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    global_followup = get_followup_days()
+    today_str        = datetime.now().strftime("%Y-%m-%d")
+    total_feedback   = len(rows)
+    today_count = overdue = pending = resolved_count = 0
+    feedback_list = []
+
+    for r in rows:
+        try:
+            date_obj = datetime.strptime(r["date"], "%Y-%m-%d")
+            days = (datetime.now() - date_obj).days
+        except Exception:
+            days = 0
+
+        status       = r["status"]       or "Open"
+        priority     = r["priority"]     or "Medium"
+        submitted_by = r["submitted_by"] or "—"
+        image_url    = r["image_url"]    or ""
+
+        try:
+            fu_days = int(r["followup_days"]) if r["followup_days"] else global_followup
+        except Exception:
+            fu_days = global_followup
+
+        if days >= fu_days and status == "Open":
+            status = "Follow Up"
+
+        if status == "Resolved":
+            resolved_count += 1
+        elif days >= fu_days:
+            overdue += 1
         else:
-            cur.execute(
-                "SELECT * FROM feedback WHERE submitted_by=%s ORDER BY id DESC",
-                (get_current_user(request),)
-            )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
+            pending += 1
 
-        global_followup = get_followup_days()
-        today_str        = datetime.now().strftime("%Y-%m-%d")
-        total_feedback   = len(rows)
-        today_count = overdue = pending = resolved_count = 0
-        feedback_list = []
+        if r["date"] == today_str:
+            today_count += 1
 
-        for r in rows:
-            try:
-                date_obj = datetime.strptime(str(r["date"]), "%Y-%m-%d")
-                days = (datetime.now() - date_obj).days
-            except Exception:
-                days = 0
-
-            status       = r["status"]       if r["status"]       else "Open"
-            priority     = r["priority"]     if r["priority"]     else "Medium"
-            submitted_by = r["submitted_by"] if r["submitted_by"] else "—"
-
-            try:
-                fu_days = int(r["followup_days"]) if r["followup_days"] else global_followup
-            except Exception:
-                fu_days = global_followup
-
-            if days >= fu_days and status == "Open":
-                status = "Follow Up"
-
-            if status == "Resolved":
-                resolved_count += 1
-            elif days >= fu_days:
-                overdue += 1
-            else:
-                pending += 1
-
-            if str(r["date"]) == today_str:
-                today_count += 1
-
-            feedback_list.append({
-                "id":           r["id"],
-                "person":       r["person"],
-                "message":      r["message"],
-                "voice":        r["voice"],
-                "images":       r["images"],
-                "date":         str(r["date"]),
-                "days":         days,
-                "status":       status,
-                "priority":     priority,
-                "submitted_by": submitted_by,
-                "followup_days": fu_days,
-            })
-
-        return templates.TemplateResponse("index.html", {
-            "request":       request,
-            "feedback":      feedback_list,
-            "employees":     EMPLOYEES,
-            "total":         total_feedback,
-            "pending":       pending,
-            "overdue":       overdue,
-            "today":         today_count,
-            "resolved":      resolved_count,
-            "followup_days": global_followup,
-            "now":           datetime.now().strftime("%A, %d %B %Y"),
-            "current_user":  get_current_user(request),
-            "current_role":  get_current_role(request),
+        feedback_list.append({
+            "id":           r["id"],
+            "person":       r["person"],
+            "message":      r["message"],
+            "voice":        r["voice"],
+            "date":         r["date"],
+            "days":         days,
+            "status":       status,
+            "priority":     priority,
+            "submitted_by": submitted_by,
+            "followup_days": fu_days,
+            "image_url":    image_url,
         })
-    except Exception as e:
-        logger.error(f"Home page error: {e}")
-        raise HTTPException(status_code=500, detail="Database error")
 
-# ========================
+    return templates.TemplateResponse("index.html", {
+        "request":       request,
+        "feedback":      feedback_list,
+        "employees":     EMPLOYEES,
+        "total":         total_feedback,
+        "pending":       pending,
+        "overdue":       overdue,
+        "today":         today_count,
+        "resolved":      resolved_count,
+        "followup_days": global_followup,
+        "now":           datetime.now().strftime("%A, %d %B %Y"),
+        "current_user":  get_current_user(request),
+        "current_role":  get_current_role(request),
+    })
+
+# -------------------------------
 # SUBMIT FEEDBACK
-# ========================
+# -------------------------------
 @app.post("/submit")
 async def submit_feedback(
-    request:      Request,
-    person:       str        = Form(...),
-    message:      str        = Form(...),
-    priority:     str        = Form("Medium"),
-    followup_days: int       = Form(15),
-    voice:        UploadFile = File(None),
-    images:       list[UploadFile] = File(None)
+    request:       Request,
+    person:        str        = Form(...),
+    message:       str        = Form(...),
+    priority:      str        = Form("Medium"),
+    followup_days: int        = Form(15),
+    voice:         UploadFile = File(None),
+    image:         UploadFile = File(None)
 ):
     redir = require_login(request)
     if redir: return redir
@@ -545,230 +495,277 @@ async def submit_feedback(
     followup_days = max(1, min(365, followup_days))
 
     phone        = EMPLOYEES[person]
-    voice_url    = ""
-    image_urls   = []
+    voice_path   = ""
+    image_url    = ""
     submitted_by = get_current_user(request) or "unknown"
 
-    # Process voice file (upload to Cloudinary)
+    # Handle voice note
     if voice and voice.filename:
-        try:
-            voice_url = upload_voice_to_cloudinary(voice)
-            logger.info(f"Voice uploaded to Cloudinary: {voice_url}")
-        except Exception as e:
-            logger.error(f"Voice upload error: {e}")
-            # Continue without voice if upload fails
+        timestamp       = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename   = werkzeug.utils.secure_filename(voice.filename) or "voice.mp3"
+        unique_filename = f"{timestamp}_{safe_filename}"
+        voice_path      = f"uploads/{unique_filename}"
+        with open(voice_path, "wb") as buf:
+            shutil.copyfileobj(voice.file, buf)
 
-    # Process image files (upload to Cloudinary)
-    if images:
-        for idx, image in enumerate(images):
-            if image and image.filename:
-                try:
-                    image_url = upload_to_cloudinary(image)
-                    image_urls.append(image_url)
-                    logger.info(f"Image {idx+1} uploaded to Cloudinary: {image_url}")
-                except Exception as e:
-                    logger.error(f"Image {idx+1} upload error: {e}")
-                    # Continue with other images if one fails
+    # Handle image upload to Cloudinary
+    if image and image.filename:
+        image_bytes = await image.read()
+        safe_name   = werkzeug.utils.secure_filename(image.filename) or "image.jpg"
+        url, pub_id = upload_to_cloudinary(image_bytes, safe_name, folder="feedflow/feedback")
+        if url:
+            image_url = url
 
-    images_json = ",".join(image_urls) if image_urls else None
     today = datetime.now().strftime("%Y-%m-%d")
 
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute(
-            """INSERT INTO feedback(person, phone, message, voice, images, date, priority, status, submitted_by, followup_days)
-               VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-            (person, phone, message, voice_url, images_json, today, priority, "Open", submitted_by, followup_days)
-        )
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO feedback(person, phone, message, voice, date, priority, status, submitted_by, followup_days, image_url) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (person, phone, message, voice_path, today, priority, "Open", submitted_by, followup_days, image_url)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    priority_emoji = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(priority, "")
+    send_whatsapp(phone,
+        f"📋 Feedback [{priority_emoji} {priority} Priority]:\n\n"
+        f"{message}\n\n"
+        f"⏰ Follow-up in {followup_days} days if unresolved.\n"
+        f"👤 Sent by: {submitted_by}"
+    )
+
+    if voice_path:
+        send_whatsapp_voice(phone, f"{BASE_URL}/{voice_path}")
+
+    if image_url:
+        send_whatsapp_image(phone, image_url, caption=f"📎 Image attached to feedback from {submitted_by}")
+
+    return RedirectResponse("/", status_code=303)
+
+# -------------------------------
+# IMAGE GALLERY PAGE
+# -------------------------------
+@app.get("/images", response_class=HTMLResponse)
+def images_page(request: Request):
+    redir = require_login(request)
+    if redir: return redir
+
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    if is_admin(request):
+        cur.execute("SELECT * FROM images ORDER BY id DESC")
+    else:
+        cur.execute("SELECT * FROM images WHERE uploaded_by=%s ORDER BY id DESC",
+                    (get_current_user(request),))
+    images = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return templates.TemplateResponse("images.html", {
+        "request":      request,
+        "images":       images,
+        "employees":    EMPLOYEES,
+        "current_user": get_current_user(request),
+        "current_role": get_current_role(request),
+        "now":          datetime.now().strftime("%A, %d %B %Y"),
+    })
+
+@app.post("/images/upload")
+async def upload_image(
+    request:     Request,
+    title:       str        = Form(""),
+    image:       UploadFile = File(...),
+    send_to_wa:  str        = Form(""),
+    wa_employee: str        = Form(""),
+):
+    redir = require_login(request)
+    if redir: return redir
+
+    if not image or not image.filename:
+        return RedirectResponse("/images?error=No+image+selected", status_code=303)
+
+    image_bytes = await image.read()
+    safe_name   = werkzeug.utils.secure_filename(image.filename) or "image.jpg"
+    url, pub_id = upload_to_cloudinary(image_bytes, safe_name, folder="feedflow/gallery")
+
+    if not url:
+        return RedirectResponse("/images?error=Upload+failed", status_code=303)
+
+    uploaded_by = get_current_user(request) or "unknown"
+    uploaded_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO images(title, image_url, public_id, uploaded_by, uploaded_at) VALUES(%s,%s,%s,%s,%s)",
+        (title or safe_name, url, pub_id, uploaded_by, uploaded_at)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    # Send to WhatsApp if requested
+    if send_to_wa and wa_employee and wa_employee in EMPLOYEES:
+        phone = EMPLOYEES[wa_employee]
+        send_whatsapp_image(phone, url, caption=f"📸 {title or 'Image'} — shared by {uploaded_by}")
+
+    return RedirectResponse("/images", status_code=303)
+
+@app.post("/images/delete/{id}")
+def delete_image(request: Request, id: int):
+    redir = require_login(request)
+    if redir: return redir
+
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM images WHERE id=%s", (id,))
+    img = cur.fetchone()
+
+    if img:
+        # Delete from Cloudinary too
+        try:
+            if img["public_id"]:
+                cloudinary.uploader.destroy(img["public_id"])
+        except Exception as e:
+            logger.error("Cloudinary delete failed: %s", e)
+
+        cur.execute("DELETE FROM images WHERE id=%s", (id,))
         conn.commit()
-        cur.close()
-        conn.close()
 
-        # Send WhatsApp notification
-        priority_emoji = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(priority, "")
-        send_whatsapp(phone,
-            f"📋 Feedback [{priority_emoji} {priority} Priority]:\n\n"
-            f"{message}\n\n"
-            f"⏰ Follow-up due in {followup_days} days if unresolved.\n"
-            f"👤 Sent by: {submitted_by}"
-        )
+    cur.close()
+    conn.close()
+    return RedirectResponse("/images", status_code=303)
 
-        # Send voice if available
-        if voice_url:
-            send_whatsapp_file(phone, voice_url, file_type="voice")
-
-        # Send images if available
-        for img_url in image_urls:
-            send_whatsapp_file(phone, img_url, file_type="image")
-
-        return RedirectResponse("/", status_code=303)
-    except Exception as e:
-        logger.error(f"Submit feedback error: {e}")
-        raise HTTPException(status_code=500, detail="Error saving feedback")
-
-# ========================
+# -------------------------------
 # RESOLVE / REOPEN
-# ========================
+# -------------------------------
 @app.post("/resolve/{id}")
 def resolve_feedback(request: Request, id: int):
     redir = require_login(request)
     if redir: return redir
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("UPDATE feedback SET status=%s WHERE id=%s", ("Resolved", id))
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Resolve error: {e}")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE feedback SET status='Resolved' WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
     return RedirectResponse("/", status_code=303)
 
 @app.post("/reopen/{id}")
 def reopen_feedback(request: Request, id: int):
     redir = require_login(request)
     if redir: return redir
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("UPDATE feedback SET status=%s WHERE id=%s", ("Open", id))
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Reopen error: {e}")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE feedback SET status='Open' WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
     return RedirectResponse("/", status_code=303)
 
-# ========================
+# -------------------------------
 # EDIT FEEDBACK
-# ========================
+# -------------------------------
 @app.post("/edit/{id}")
 def edit_feedback(request: Request, id: int, message: str = Form(...)):
     redir = require_login(request)
     if redir: return redir
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("UPDATE feedback SET message=%s WHERE id=%s", (message, id))
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Edit error: {e}")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE feedback SET message=%s WHERE id=%s", (message, id))
+    conn.commit()
+    cur.close()
+    conn.close()
     return RedirectResponse("/", status_code=303)
 
-# ========================
+# -------------------------------
 # DELETE FEEDBACK
-# ========================
+# -------------------------------
 @app.post("/delete/{id}")
 def delete_feedback(request: Request, id: int):
     redir = require_login(request)
     if redir: return redir
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("DELETE FROM feedback WHERE id=%s", (id,))
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Delete error: {e}")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM feedback WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
     return RedirectResponse("/", status_code=303)
 
-# ========================
+# -------------------------------
 # EXPORT CSV
-# ========================
+# -------------------------------
 @app.get("/export")
 def export_csv(request: Request):
     redir = require_login(request)
     if redir: return redir
 
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        
-        if is_admin(request):
-            cur.execute(
-                "SELECT id, person, phone, message, date, priority, status, submitted_by, followup_days FROM feedback ORDER BY id DESC"
-            )
-        else:
-            cur.execute(
-                "SELECT id, person, phone, message, date, priority, status, submitted_by, followup_days FROM feedback WHERE submitted_by=%s ORDER BY id DESC",
-                (get_current_user(request),)
-            )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if is_admin(request):
+        cur.execute("SELECT id, person, phone, message, date, priority, status, submitted_by, followup_days FROM feedback ORDER BY id DESC")
+    else:
+        cur.execute("SELECT id, person, phone, message, date, priority, status, submitted_by, followup_days FROM feedback WHERE submitted_by=%s ORDER BY id DESC",
+                    (get_current_user(request),))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["ID", "Employee", "Phone", "Message", "Date", "Priority", "Status", "Submitted By", "Follow Up Days"])
-        for r in rows:
-            writer.writerow([r["id"], r["person"], r["phone"], r["message"],
-                             r["date"], r["priority"], r["status"], r["submitted_by"], r["followup_days"]])
-        output.seek(0)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Employee", "Phone", "Message", "Date", "Priority", "Status", "Submitted By", "Follow Up Days"])
+    for r in rows:
+        writer.writerow([r["id"], r["person"], r["phone"], r["message"],
+                         r["date"], r["priority"], r["status"], r["submitted_by"], r["followup_days"]])
+    output.seek(0)
 
-        return StreamingResponse(
-            io.BytesIO(output.getvalue().encode()),
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=feedback_export.csv"}
-        )
-    except Exception as e:
-        logger.error(f"Export error: {e}")
-        raise HTTPException(status_code=500, detail="Export failed")
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=feedback_export.csv"}
+    )
 
-# ========================
-# SETTINGS PAGE (admin only)
-# ========================
+# -------------------------------
+# SETTINGS (admin only)
+# -------------------------------
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
     redir = require_admin(request)
     if redir: return redir
 
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("SELECT id, username, role, created_at FROM users ORDER BY id")
-        users = cur.fetchall()
-        cur.close()
-        conn.close()
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT id, username, role, created_at FROM users ORDER BY id")
+    users = cur.fetchall()
+    cur.close()
+    conn.close()
 
-        followup_days = get_followup_days()
-        saved  = request.query_params.get("saved", "")
-        error  = request.query_params.get("error", "")
-
-        return templates.TemplateResponse("settings.html", {
-            "request":       request,
-            "followup_days": followup_days,
-            "users":         users,
-            "saved":         saved,
-            "error":         error,
-            "current_user":  get_current_user(request),
-            "current_role":  get_current_role(request),
-        })
-    except Exception as e:
-        logger.error(f"Settings page error: {e}")
-        raise HTTPException(status_code=500, detail="Settings error")
+    return templates.TemplateResponse("settings.html", {
+        "request":       request,
+        "followup_days": get_followup_days(),
+        "users":         users,
+        "saved":         request.query_params.get("saved", ""),
+        "error":         request.query_params.get("error", ""),
+        "current_user":  get_current_user(request),
+        "current_role":  get_current_role(request),
+    })
 
 @app.post("/settings")
 def save_settings(request: Request, followup_days: int = Form(...)):
     redir = require_admin(request)
     if redir: return redir
-    followup_days = max(1, min(365, followup_days))
-    set_setting("followup_days", str(followup_days))
+    set_setting("followup_days", str(max(1, min(365, followup_days))))
     return RedirectResponse("/settings?saved=1", status_code=303)
 
-# ========================
+# -------------------------------
 # USER MANAGEMENT (admin only)
-# ========================
+# -------------------------------
 @app.post("/users/add")
-def add_user(
-    request:  Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    role:     str = Form("user")
-):
+def add_user(request: Request, username: str = Form(...), password: str = Form(...), role: str = Form("user")):
     redir = require_admin(request)
     if redir: return redir
 
@@ -780,10 +777,10 @@ def add_user(
 
     try:
         conn = get_db()
-        cur = dict_cursor(conn)
+        cur = conn.cursor()
         cur.execute(
-            "INSERT INTO users(username, password, role, created_at) VALUES(%s, %s, %s, CURRENT_DATE)",
-            (username, hash_password(password), role)
+            "INSERT INTO users(username, password, role, created_at) VALUES(%s,%s,%s,%s)",
+            (username, hash_password(password), role, datetime.now().strftime("%Y-%m-%d"))
         )
         conn.commit()
         cur.close()
@@ -791,76 +788,50 @@ def add_user(
         return RedirectResponse("/settings?saved=1", status_code=303)
     except psycopg2.IntegrityError:
         return RedirectResponse("/settings?error=Username+already+exists.", status_code=303)
-    except Exception as e:
-        logger.error(f"Add user error: {e}")
-        return RedirectResponse("/settings?error=Database+error.", status_code=303)
 
 @app.post("/users/delete/{id}")
 def delete_user(request: Request, id: int):
     redir = require_admin(request)
     if redir: return redir
 
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("SELECT username FROM users WHERE id=%s", (id,))
-        user = cur.fetchone()
-        
-        if user and user["username"] == get_current_user(request):
-            cur.close()
-            conn.close()
-            return RedirectResponse("/settings?error=You+cannot+delete+your+own+account.", status_code=303)
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT username, role FROM users WHERE id=%s", (id,))
+    user = cur.fetchone()
 
-        cur.execute("SELECT COUNT(*) FROM users WHERE role=%s", ("admin",))
-        admins = cur.fetchone()[0]
-        
-        cur.execute("SELECT role FROM users WHERE id=%s", (id,))
-        target = cur.fetchone()
-        
-        if target and target["role"] == "admin" and admins <= 1:
-            cur.close()
-            conn.close()
-            return RedirectResponse("/settings?error=Cannot+delete+the+last+admin.", status_code=303)
+    if user and user["username"] == get_current_user(request):
+        cur.close(); conn.close()
+        return RedirectResponse("/settings?error=You+cannot+delete+your+own+account.", status_code=303)
 
-        cur.execute("DELETE FROM users WHERE id=%s", (id,))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return RedirectResponse("/settings?saved=1", status_code=303)
-    except Exception as e:
-        logger.error(f"Delete user error: {e}")
-        return RedirectResponse("/settings?error=Database+error.", status_code=303)
+    cur.execute("SELECT COUNT(*) FROM users WHERE role='admin'")
+    admin_count = cur.fetchone()["count"]
+    if user and user["role"] == "admin" and admin_count <= 1:
+        cur.close(); conn.close()
+        return RedirectResponse("/settings?error=Cannot+delete+the+last+admin.", status_code=303)
+
+    cur.execute("DELETE FROM users WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return RedirectResponse("/settings?saved=1", status_code=303)
 
 @app.post("/users/change-password")
-def change_password(
-    request:      Request,
-    old_password: str = Form(...),
-    new_password: str = Form(...),
-):
+def change_password(request: Request, old_password: str = Form(...), new_password: str = Form(...)):
     redir = require_login(request)
     if redir: return redir
 
     username = get_current_user(request)
-    try:
-        conn = get_db()
-        cur = dict_cursor(conn)
-        cur.execute("SELECT * FROM users WHERE username=%s", (username,))
-        user = cur.fetchone()
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM users WHERE username=%s", (username,))
+    user = cur.fetchone()
 
-        if not user or not verify_password(old_password, user["password"]):
-            cur.close()
-            conn.close()
-            return RedirectResponse("/settings?error=Current+password+is+wrong.", status_code=303)
+    if not user or not verify_password(old_password, user["password"]):
+        cur.close(); conn.close()
+        return RedirectResponse("/settings?error=Current+password+is+wrong.", status_code=303)
 
-        cur.execute("UPDATE users SET password=%s WHERE username=%s", (hash_password(new_password), username))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return RedirectResponse("/settings?saved=1", status_code=303)
-    except Exception as e:
-        logger.error(f"Change password error: {e}")
-        return RedirectResponse("/settings?error=Database+error.", status_code=303)
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+    cur.execute("UPDATE users SET password=%s WHERE username=%s", (hash_password(new_password), username))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return RedirectResponse("/settings?saved=1", status_code=303)

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Image Gallery — FeedFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<style>
+:root {
+  --bg: #f2ece0; --surface: #faf6ee; --surface2: #ede5d8; --border: #d4c9b5;
+  --accent: #a63d10; --accent-light: #f5e6df;
+  --danger: #b83232; --danger-light: #f9eaea;
+  --success: #2e6e35; --success-light: #e6f4e8;
+  --warning: #c47a0a; --warning-light: #fdf3e0;
+  --text: #18120a; --text-muted: #5a4a32; --text-dim: #a0917a;
+  --font-display: 'Syne', sans-serif; --font-body: 'DM Sans', sans-serif;
+  --radius: 14px; --radius-sm: 9px; --sidebar-w: 230px;
+  --shadow: 0 2px 12px rgba(100,70,30,0.10); --shadow-lg: 0 6px 32px rgba(100,70,30,0.13);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(180,140,90,0.07) 0%, transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+  color: var(--text); display: flex; min-height: 100vh; font-size: 14px; font-weight: 500;
+}
+h1,h2,h3 { font-weight: 800 !important; }
+p, label, span, td { font-weight: 600; }
+
+/* SIDEBAR */
+.sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1.5px solid var(--border); display: flex; flex-direction: column; padding: 28px 0; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 16px rgba(100,70,30,0.07); }
+.sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 24px 26px; border-bottom: 1.5px solid var(--border); font-family: var(--font-display); font-weight: 800; font-size: 19px; color: var(--text); }
+.logo-icon { color: var(--accent); font-size: 22px; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 3px; padding: 18px 12px; flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-sm); color: var(--text-muted); text-decoration: none; font-weight: 700; font-size: 13.5px; transition: all 0.18s; }
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: var(--accent-light); color: var(--accent); }
+.nav-icon { font-size: 14px; width: 18px; text-align: center; }
+.nav-logout { color: var(--danger) !important; }
+.nav-logout:hover { background: var(--danger-light) !important; }
+.user-badge { margin: 0 12px 12px; padding: 10px 14px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: var(--radius-sm); }
+.user-badge-name { font-weight: 800; color: var(--text); font-size: 13px; }
+.user-badge-role { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.sidebar-footer { padding: 0 24px; font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+
+/* HAMBURGER */
+.hamburger { display: none; position: fixed; top: 16px; left: 16px; z-index: 200; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); width: 42px; height: 42px; font-size: 18px; cursor: pointer; color: var(--text); box-shadow: var(--shadow); align-items: center; justify-content: center; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(60,30,10,0.4); z-index: 99; backdrop-filter: blur(2px); }
+
+/* MAIN */
+.main { margin-left: var(--sidebar-w); flex: 1; padding: 38px 44px; }
+.page-header { margin-bottom: 30px; padding-bottom: 24px; border-bottom: 1.5px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+.page-title { font-family: var(--font-display); font-size: 34px; font-weight: 800; letter-spacing: -1.2px; color: var(--text); }
+.page-subtitle { color: var(--text-muted); margin-top: 5px; font-size: 14px; font-weight: 600; }
+
+/* CARD */
+.card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px; box-shadow: var(--shadow); animation: fadeUp 0.4s ease both; }
+.section-title { font-family: var(--font-display); font-size: 18px; font-weight: 800; margin-bottom: 20px; color: var(--text); }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+/* DRAG AND DROP UPLOAD ZONE */
+.drop-zone {
+  border: 2.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface2);
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.drop-zone input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.drop-icon { font-size: 48px; margin-bottom: 14px; color: var(--text-dim); }
+.drop-title { font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+.drop-sub { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.drop-preview { margin-top: 16px; display: none; }
+.drop-preview img { max-height: 180px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); box-shadow: var(--shadow); }
+
+/* FORM ELEMENTS */
+.form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.form-label { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted); }
+input[type="text"], select {
+  background: var(--surface2); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-family: var(--font-body); font-size: 14px; font-weight: 600;
+  padding: 11px 14px; outline: none; transition: border-color 0.2s; width: 100%;
+}
+input[type="text"]:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(166,61,16,0.1); }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* WA TOGGLE */
+.wa-toggle { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.18s; margin-bottom: 12px; }
+.wa-toggle:hover { border-color: var(--success); background: var(--success-light); }
+.wa-toggle input { display: none; }
+.toggle-dot { width: 36px; height: 20px; background: var(--border); border-radius: 20px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+.toggle-dot::after { content: ''; position: absolute; width: 16px; height: 16px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: left 0.2s; }
+.wa-toggle input:checked ~ .toggle-dot { background: var(--success); }
+.wa-toggle input:checked ~ .toggle-dot::after { left: 18px; }
+.wa-label { font-weight: 700; font-size: 13.5px; color: var(--text); }
+
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: var(--radius-sm); border: none; font-family: var(--font-body); font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.18s; }
+.btn-primary { background: var(--accent); color: #fff; font-family: var(--font-display); font-weight: 800; box-shadow: 0 4px 16px rgba(166,61,16,0.25); }
+.btn-primary:hover { background: #8f3309; transform: translateY(-1px); }
+.btn-danger-sm { background: var(--danger-light); color: var(--danger); border: 1.5px solid var(--danger); padding: 6px 10px; font-size: 12px; border-radius: 7px; cursor: pointer; font-weight: 700; transition: all 0.15s; }
+.btn-danger-sm:hover { background: #f5d5d5; }
+
+/* Tom Select */
+.ts-wrapper .ts-control { background: var(--surface2) !important; border: 1.5px solid var(--border) !important; border-radius: var(--radius-sm) !important; color: var(--text) !important; font-weight: 600 !important; padding: 10px 14px !important; box-shadow: none !important; min-height: unset !important; }
+.ts-wrapper.focus .ts-control { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(166,61,16,0.1) !important; }
+.ts-dropdown { background: var(--surface) !important; border: 1.5px solid var(--border) !important; border-radius: var(--radius-sm) !important; color: var(--text) !important; }
+.ts-dropdown .option:hover, .ts-dropdown .option.active { background: var(--accent-light) !important; color: var(--accent) !important; }
+
+/* GALLERY GRID */
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; margin-top: 4px; }
+.gallery-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); transition: transform 0.2s, box-shadow 0.2s; }
+.gallery-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.gallery-img { width: 100%; height: 180px; object-fit: cover; display: block; cursor: zoom-in; }
+.gallery-info { padding: 12px 14px; }
+.gallery-title { font-family: var(--font-display); font-weight: 800; font-size: 14px; color: var(--text); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gallery-meta { font-size: 11.5px; color: var(--text-dim); font-weight: 600; }
+.gallery-actions { display: flex; justify-content: flex-end; padding: 8px 12px 12px; }
+
+/* EMPTY STATE */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.empty-icon { font-size: 52px; color: var(--text-dim); margin-bottom: 16px; }
+
+/* ALERTS */
+.toast { display: flex; align-items: center; gap: 10px; border-radius: var(--radius-sm); padding: 13px 18px; margin-bottom: 20px; font-weight: 700; animation: fadeUp 0.3s ease both; }
+.toast-error { background: var(--danger-light); border: 1.5px solid #e8c0c0; color: var(--danger); }
+
+/* LIGHTBOX */
+.lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; align-items: center; justify-content: center; }
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 90vw; max-height: 90vh; border-radius: var(--radius); box-shadow: 0 8px 40px rgba(0,0,0,0.4); }
+.lightbox-close { position: absolute; top: 20px; right: 24px; color: white; font-size: 32px; cursor: pointer; font-weight: 800; }
+
+/* PROGRESS BAR */
+.upload-progress { display: none; margin-top: 14px; }
+.progress-bar { height: 6px; background: var(--border); border-radius: 10px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 10px; width: 0%; transition: width 0.3s; }
+.progress-text { font-size: 12px; color: var(--text-muted); font-weight: 700; margin-top: 6px; }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .hamburger { display: flex; }
+  .sidebar { display: flex !important; transform: translateX(-100%); transition: transform 0.3s ease; }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .main { margin-left: 0; padding: 70px 16px 20px; }
+  .form-row { grid-template-columns: 1fr; }
+  .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+}
+</style>
+</head>
+<body>
+
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">◈</span>
+    <span class="logo-text">FeedFlow</span>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="/"         class="nav-item"><span class="nav-icon">✦</span> Submit</a>
+    <a href="/#log-section" class="nav-item"><span class="nav-icon">◎</span> Log</a>
+    <a href="/images"   class="nav-item active"><span class="nav-icon">🖼</span> Images</a>
+    <a href="/export"   class="nav-item"><span class="nav-icon">↓</span> Export CSV</a>
+    {% if current_role == 'admin' %}
+    <a href="/settings" class="nav-item"><span class="nav-icon">⚙</span> Settings</a>
+    {% endif %}
+    <a href="/logout"   class="nav-item nav-logout"><span class="nav-icon">⏻</span> Logout</a>
+  </nav>
+  <div class="user-badge">
+    <div class="user-badge-name">👤 {{ current_user }}</div>
+    <div class="user-badge-role">{{ current_role }}</div>
+  </div>
+  <div class="sidebar-footer">Internal Tool</div>
+</aside>
+
+<main class="main">
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">Image Gallery</h1>
+      <p class="page-subtitle">Upload, share and send images via WhatsApp</p>
+    </div>
+    <div style="font-size:12px; color:var(--text-dim); font-family:var(--font-display); font-weight:700;">{{ now }}</div>
+  </header>
+
+  {% if request.query_params.get('error') %}
+  <div class="toast toast-error">⚠ {{ request.query_params.get('error') }}</div>
+  {% endif %}
+
+  <!-- UPLOAD CARD -->
+  <div class="card">
+    <h2 class="section-title">Upload Image</h2>
+    <form action="/images/upload" method="post" enctype="multipart/form-data" id="uploadForm">
+
+      <!-- DRAG AND DROP ZONE -->
+      <div class="drop-zone" id="dropZone">
+        <input type="file" name="image" id="imageInput" accept="image/*" required>
+        <div class="drop-icon">🖼</div>
+        <div class="drop-title">Drag & drop an image here</div>
+        <div class="drop-sub">or click to browse — JPG, PNG, GIF, WEBP supported</div>
+        <div class="drop-preview" id="dropPreview">
+          <img id="previewImg" src="" alt="Preview">
+        </div>
+      </div>
+
+      <div class="upload-progress" id="uploadProgress">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText">Uploading...</div>
+      </div>
+
+      <br>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Title / Description</label>
+          <input type="text" name="title" placeholder="e.g. Design reference, Product photo...">
+        </div>
+        <div class="form-group" id="waEmployeeGroup" style="display:none;">
+          <label class="form-label">Send to Employee</label>
+          <select name="wa_employee" id="waEmployeeSelect">
+            <option value="">Select employee...</option>
+            {% for name in employees %}
+            <option value="{{ name }}">{{ name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- WHATSAPP TOGGLE -->
+      <label class="wa-toggle">
+        <input type="checkbox" name="send_to_wa" value="yes" id="waToggle" onchange="toggleWaEmployee()">
+        <div class="toggle-dot"></div>
+        <span class="wa-label">📱 Also send this image via WhatsApp</span>
+      </label>
+
+      <button type="submit" class="btn btn-primary" id="uploadBtn">
+        ↑ Upload Image
+      </button>
+    </form>
+  </div>
+
+  <!-- GALLERY -->
+  <div class="card">
+    <h2 class="section-title">
+      Gallery
+      <span style="font-size:13px; color:var(--text-dim); font-weight:600; margin-left:8px;">{{ images|length }} image{% if images|length != 1 %}s{% endif %}</span>
+    </h2>
+
+    {% if images %}
+    <div class="gallery-grid">
+      {% for img in images %}
+      <div class="gallery-card">
+        <img class="gallery-img" src="{{ img.image_url }}" alt="{{ img.title }}"
+             onclick="openLightbox('{{ img.image_url }}')">
+        <div class="gallery-info">
+          <div class="gallery-title">{{ img.title }}</div>
+          <div class="gallery-meta">
+            👤 {{ img.uploaded_by }}<br>
+            🕐 {{ img.uploaded_at }}
+          </div>
+        </div>
+        <div class="gallery-actions">
+          <form action="/images/delete/{{ img.id }}" method="post"
+                onsubmit="return confirm('Delete this image?')">
+            <button type="submit" class="btn-danger-sm">🗑 Delete</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🖼</div>
+      <p>No images uploaded yet.</p>
+      <p style="font-size:13px; color:var(--text-dim); margin-top:6px;">Use the form above to upload your first image.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</main>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close" onclick="closeLightbox()">✕</span>
+  <img id="lightboxImg" src="" alt="Full size">
+</div>
+
+<script>
+// SIDEBAR MOBILE
+function toggleSidebar() {
+  document.querySelector(".sidebar").classList.toggle("open");
+  document.getElementById("sidebarOverlay").classList.toggle("open");
+}
+
+// TOM SELECT for employee
+new TomSelect("#waEmployeeSelect", { create: false, sortField: { field: "text", direction: "asc" } });
+
+// WA EMPLOYEE TOGGLE
+function toggleWaEmployee() {
+  const checked = document.getElementById("waToggle").checked;
+  document.getElementById("waEmployeeGroup").style.display = checked ? "block" : "none";
+}
+
+// DRAG AND DROP
+const dropZone  = document.getElementById("dropZone");
+const imageInput = document.getElementById("imageInput");
+const dropPreview = document.getElementById("dropPreview");
+const previewImg  = document.getElementById("previewImg");
+
+dropZone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropZone.classList.add("drag-over");
+});
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith("image/")) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    imageInput.files = dt.files;
+    showPreview(file);
+  }
+});
+
+imageInput.addEventListener("change", () => {
+  if (imageInput.files[0]) showPreview(imageInput.files[0]);
+});
+
+function showPreview(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    previewImg.src = e.target.result;
+    dropPreview.style.display = "block";
+    dropZone.querySelector(".drop-icon").innerText = "✔";
+    dropZone.querySelector(".drop-title").innerText = file.name;
+    dropZone.querySelector(".drop-sub").innerText = (file.size / 1024).toFixed(1) + " KB";
+  };
+  reader.readAsDataURL(file);
+}
+
+// UPLOAD PROGRESS SIMULATION
+document.getElementById("uploadForm").onsubmit = () => {
+  if (!imageInput.files[0]) return true;
+  const progress = document.getElementById("uploadProgress");
+  const fill     = document.getElementById("progressFill");
+  const text     = document.getElementById("progressText");
+  const btn      = document.getElementById("uploadBtn");
+
+  progress.style.display = "block";
+  btn.disabled = true;
+  btn.innerText = "Uploading...";
+
+  let width = 0;
+  const interval = setInterval(() => {
+    width += Math.random() * 15;
+    if (width > 90) width = 90;
+    fill.style.width = width + "%";
+    text.innerText = `Uploading... ${Math.round(width)}%`;
+  }, 200);
+
+  return true;
+};
+
+// LIGHTBOX
+function openLightbox(url) {
+  document.getElementById("lightboxImg").src = url;
+  document.getElementById("lightbox").classList.add("open");
+}
+function closeLightbox() {
+  document.getElementById("lightbox").classList.remove("open");
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
+</script>
+
+{% set employees = employees if employees is defined else {} %}
+<script>
+// Pass employees to JS for TomSelect (already done above)
+</script>
+</body>
+</html>

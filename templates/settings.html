@@ -12,7 +12,6 @@
   --accent: #a63d10; --accent-light: #f5e6df;
   --danger: #b83232; --danger-light: #f9eaea;
   --success: #2e6e35; --success-light: #e6f4e8;
-  --warning: #c47a0a; --warning-light: #fdf3e0;
   --info: #1a5f9e; --info-light: #e0ecf9;
   --text: #18120a; --text-muted: #5a4a32; --text-dim: #a0917a;
   --font-display: 'Syne', sans-serif; --font-body: 'DM Sans', sans-serif;
@@ -42,12 +41,14 @@ h1, h2, h3 { font-weight: 800 !important; }
 .nav-icon { font-size: 14px; width: 18px; text-align: center; }
 .nav-logout { color: var(--danger) !important; }
 .nav-logout:hover { background: var(--danger-light) !important; }
-.sidebar-footer { padding: 0 24px; font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
-
-/* USER BADGE in sidebar */
 .user-badge { margin: 0 12px 12px; padding: 10px 14px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; }
 .user-badge-name { font-weight: 800; color: var(--text); font-size: 13px; }
 .user-badge-role { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.sidebar-footer { padding: 0 24px; font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+
+/* HAMBURGER */
+.hamburger { display: none; position: fixed; top: 16px; left: 16px; z-index: 200; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); width: 42px; height: 42px; font-size: 18px; cursor: pointer; color: var(--text); box-shadow: var(--shadow); align-items: center; justify-content: center; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(60,30,10,0.4); z-index: 99; backdrop-filter: blur(2px); }
 
 /* MAIN */
 .main { margin-left: var(--sidebar-w); flex: 1; padding: 38px 44px; max-width: 780px; }
@@ -63,7 +64,7 @@ h1, h2, h3 { font-weight: 800 !important; }
 .section-desc { font-size: 13px; color: var(--text-muted); font-weight: 600; margin-bottom: 22px; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 
-/* FORM ELEMENTS */
+/* FORM */
 .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
 .form-label { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted); }
 .form-label span { color: var(--text-dim); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 12px; margin-left: 6px; }
@@ -74,18 +75,12 @@ input[type="text"], input[type="password"], select {
 }
 input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(166,61,16,0.1); }
 
-/* FORM ROW */
-.form-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
-.form-row .form-group { margin-bottom: 0; }
-
 /* NUMBER CONTROL */
 .number-control { display: flex; align-items: center; width: fit-content; border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface2); }
 .num-btn { width: 42px; height: 42px; background: var(--surface2); border: none; font-size: 18px; font-weight: 800; color: var(--text-muted); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
 .num-btn:hover { background: var(--border); color: var(--text); }
-.num-input { width: 72px; text-align: center; border: none; border-left: 1.5px solid var(--border); border-right: 1.5px solid var(--border); background: var(--surface); color: var(--text); font-family: var(--font-display); font-size: 20px; font-weight: 800; padding: 8px 4px; outline: none; appearance: textfield; -moz-appearance: textfield; }
+.num-input { width: 72px; text-align: center; border: none; border-left: 1.5px solid var(--border); border-right: 1.5px solid var(--border); background: var(--surface); color: var(--text); font-family: var(--font-display); font-size: 20px; font-weight: 800; padding: 8px 4px; outline: none; -moz-appearance: textfield; }
 .num-input::-webkit-outer-spin-button, .num-input::-webkit-inner-spin-button { -webkit-appearance: none; }
-
-/* PRESETS */
 .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .preset-btn { padding: 6px 13px; border-radius: 20px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text-muted); font-family: var(--font-body); font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 .preset-btn:hover, .preset-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
@@ -104,7 +99,6 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .users-table td { padding: 12px 14px; border-bottom: 1.5px solid var(--border); font-weight: 600; vertical-align: middle; }
 .users-table tbody tr:last-child td { border-bottom: none; }
 .users-table tbody tr:hover { background: #f5efe4; }
-
 .role-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; }
 .role-admin { background: var(--accent-light); color: var(--accent); border: 1px solid #e8c4b0; }
 .role-user  { background: var(--info-light);   color: var(--info);   border: 1px solid #b8d4f0; }
@@ -115,8 +109,6 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .add-user-form h4 { font-family: var(--font-display); font-size: 14px; font-weight: 800; margin-bottom: 16px; color: var(--text); }
 .add-user-grid { display: grid; grid-template-columns: 1fr 1fr 140px auto; gap: 12px; align-items: end; }
 .add-user-grid .form-group { margin-bottom: 0; }
-
-/* CHANGE PASSWORD FORM */
 .change-pwd-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
 .change-pwd-grid .form-group { margin-bottom: 0; }
 
@@ -124,13 +116,15 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .toast { display: flex; align-items: center; gap: 10px; border-radius: var(--radius-sm); padding: 13px 18px; margin-bottom: 20px; font-weight: 700; animation: fadeUp 0.3s ease both; }
 .toast-success { background: var(--success-light); border: 1.5px solid #a8d8b0; color: var(--success); }
 .toast-error   { background: var(--danger-light);  border: 1.5px solid #e8c0c0;  color: var(--danger);  }
-
 .current-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-light); border: 1.5px solid #e8c4b0; border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 800; color: var(--accent); margin-left: 10px; }
 
 /* RESPONSIVE */
 @media (max-width: 900px) {
-  .sidebar { display: none; }
-  .main { margin-left: 0; padding: 20px 16px; max-width: 100vw; }
+  .hamburger { display: flex; }
+  .sidebar { display: flex !important; transform: translateX(-100%); transition: transform 0.3s ease; }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .main { margin-left: 0; padding: 70px 16px 20px; max-width: 100vw; }
   .add-user-grid { grid-template-columns: 1fr 1fr; }
   .change-pwd-grid { grid-template-columns: 1fr; }
 }
@@ -138,176 +132,174 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 </head>
 <body>
 
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <span class="logo-icon">◈</span>
-      <span class="logo-text">FeedFlow</span>
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">◈</span>
+    <span class="logo-text">FeedFlow</span>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="/"             class="nav-item"><span class="nav-icon">✦</span> Submit</a>
+    <a href="/#log-section" class="nav-item"><span class="nav-icon">◎</span> Log</a>
+    <a href="/images"       class="nav-item"><span class="nav-icon">🖼</span> Images</a>
+    <a href="/export"       class="nav-item"><span class="nav-icon">↓</span> Export CSV</a>
+    <a href="/settings"     class="nav-item active"><span class="nav-icon">⚙</span> Settings</a>
+    <a href="/logout"       class="nav-item nav-logout"><span class="nav-icon">⏻</span> Logout</a>
+  </nav>
+  <div class="user-badge">
+    <div class="user-badge-name">👤 {{ current_user }}</div>
+    <div class="user-badge-role">{{ current_role }}</div>
+  </div>
+  <div class="sidebar-footer">Internal Tool</div>
+</aside>
+
+<main class="main">
+
+  <header class="page-header">
+    <h1 class="page-title">Settings</h1>
+    <p class="page-subtitle">Manage users and configure FeedFlow</p>
+  </header>
+
+  {% if saved %}
+  <div class="toast toast-success">✔ Changes saved successfully!</div>
+  {% endif %}
+  {% if error %}
+  <div class="toast toast-error">⚠ {{ error }}</div>
+  {% endif %}
+
+  <!-- FOLLOW UP THRESHOLD -->
+  <div class="card">
+    <div class="section-title">
+      Follow-up Threshold
+      <span class="current-badge">Currently: {{ followup_days }} days</span>
     </div>
-    <nav class="sidebar-nav">
-      <a href="/"         class="nav-item"><span class="nav-icon">✦</span> Submit</a>
-      <a href="/#log-section" class="nav-item"><span class="nav-icon">◎</span> Log</a>
-      <a href="/export"   class="nav-item"><span class="nav-icon">↓</span> Export CSV</a>
-      <a href="/settings" class="nav-item active"><span class="nav-icon">⚙</span> Settings</a>
-      <a href="/logout"   class="nav-item nav-logout"><span class="nav-icon">⏻</span> Logout</a>
-    </nav>
-    <div class="user-badge">
-      <div class="user-badge-name">👤 {{ current_user }}</div>
-      <div class="user-badge-role">{{ current_role }}</div>
-    </div>
-    <div class="sidebar-footer">Internal Tool</div>
-  </aside>
-
-  <main class="main">
-
-    <header class="page-header">
-      <h1 class="page-title">Settings</h1>
-      <p class="page-subtitle">Manage users and configure FeedFlow</p>
-    </header>
-
-    {% if saved %}
-    <div class="toast toast-success">✔ Changes saved successfully!</div>
-    {% endif %}
-    {% if error %}
-    <div class="toast toast-error">⚠ {{ error }}</div>
-    {% endif %}
-
-    <!-- FOLLOW UP THRESHOLD -->
-    <div class="card">
-      <div class="section-title">
-        Follow-up Threshold
-        <span class="current-badge">Currently: {{ followup_days }} days</span>
+    <p class="section-desc">Feedback older than this many days gets a ⚑ Follow Up tag if still Open.</p>
+    <form action="/settings" method="post">
+      <div class="form-group">
+        <label class="form-label">Days until Follow Up <span>(1–365)</span></label>
+        <div class="number-control">
+          <button type="button" class="num-btn" onclick="changeVal(-1)">−</button>
+          <input type="number" name="followup_days" id="followupDays" class="num-input"
+                 value="{{ followup_days }}" min="1" max="365" required>
+          <button type="button" class="num-btn" onclick="changeVal(1)">+</button>
+        </div>
+        <p class="helper-text" id="helperText"></p>
       </div>
-      <p class="section-desc">Feedback older than this many days gets a ⚑ Follow Up tag if still Open.</p>
+      <div class="presets">
+        <button type="button" class="preset-btn" onclick="setVal(7)">7 days</button>
+        <button type="button" class="preset-btn" onclick="setVal(10)">10 days</button>
+        <button type="button" class="preset-btn" onclick="setVal(15)">15 days</button>
+        <button type="button" class="preset-btn" onclick="setVal(20)">20 days</button>
+        <button type="button" class="preset-btn" onclick="setVal(30)">30 days</button>
+        <button type="button" class="preset-btn" onclick="setVal(45)">45 days</button>
+        <button type="button" class="preset-btn" onclick="setVal(60)">60 days</button>
+      </div>
+      <br>
+      <button type="submit" class="btn btn-primary">Save →</button>
+    </form>
+  </div>
 
-      <form action="/settings" method="post">
+  <!-- USER MANAGEMENT -->
+  <div class="card">
+    <div class="section-title">User Management</div>
+    <p class="section-desc">Add or remove users who can access FeedFlow.</p>
+    <table class="users-table">
+      <thead>
+        <tr>
+          <th>#</th><th>Username</th><th>Role</th><th>Created</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td style="color:#a0917a; font-weight:800;">{{ u.id }}</td>
+          <td>
+            {{ u.username }}
+            {% if u.username == current_user %}<span class="you-tag">you</span>{% endif %}
+          </td>
+          <td>
+            {% if u.role == 'admin' %}
+              <span class="role-badge role-admin">⚡ Admin</span>
+            {% else %}
+              <span class="role-badge role-user">● User</span>
+            {% endif %}
+          </td>
+          <td style="color:#a0917a;">{{ u.created_at }}</td>
+          <td>
+            {% if u.username != current_user %}
+            <form action="/users/delete/{{ u.id }}" method="post" style="display:inline;"
+                  onsubmit="return confirm('Delete user {{ u.username }}?')">
+              <button type="submit" class="btn btn-danger">🗑 Delete</button>
+            </form>
+            {% else %}
+            <span style="color:#a0917a; font-size:12px;">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="add-user-form">
+      <h4>➕ Add New User</h4>
+      <form action="/users/add" method="post">
+        <div class="add-user-grid">
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" name="username" placeholder="e.g. john" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" name="password" placeholder="Set a password" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Role</label>
+            <select name="role">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <button type="submit" class="btn btn-primary">Add →</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CHANGE PASSWORD -->
+  <div class="card">
+    <div class="section-title">Change Your Password</div>
+    <p class="section-desc">Update the password for your account ({{ current_user }}).</p>
+    <form action="/users/change-password" method="post">
+      <div class="change-pwd-grid">
         <div class="form-group">
-          <label class="form-label">Days until Follow Up <span>(1–365)</span></label>
-          <div class="number-control">
-            <button type="button" class="num-btn" onclick="changeVal(-1)">−</button>
-            <input type="number" name="followup_days" id="followupDays" class="num-input"
-                   value="{{ followup_days }}" min="1" max="365" required>
-            <button type="button" class="num-btn" onclick="changeVal(1)">+</button>
-          </div>
-          <p class="helper-text" id="helperText"></p>
+          <label class="form-label">Current Password</label>
+          <input type="password" name="old_password" placeholder="••••••••" required>
         </div>
-        <div class="presets">
-          <button type="button" class="preset-btn" onclick="setVal(7)">7 days</button>
-          <button type="button" class="preset-btn" onclick="setVal(10)">10 days</button>
-          <button type="button" class="preset-btn" onclick="setVal(15)">15 days</button>
-          <button type="button" class="preset-btn" onclick="setVal(20)">20 days</button>
-          <button type="button" class="preset-btn" onclick="setVal(30)">30 days</button>
-          <button type="button" class="preset-btn" onclick="setVal(45)">45 days</button>
-          <button type="button" class="preset-btn" onclick="setVal(60)">60 days</button>
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input type="password" name="new_password" placeholder="••••••••" required>
         </div>
-        <br>
-        <button type="submit" class="btn btn-primary">Save →</button>
-      </form>
-    </div>
-
-    <!-- USER MANAGEMENT -->
-    <div class="card">
-      <div class="section-title">User Management</div>
-      <p class="section-desc">Add or remove users who can access FeedFlow. Only admins can manage users.</p>
-
-      <!-- Users list -->
-      <table class="users-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Username</th>
-            <th>Role</th>
-            <th>Created</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for u in users %}
-          <tr>
-            <td style="color:#a0917a; font-weight:800;">{{ u.id }}</td>
-            <td>
-              {{ u.username }}
-              {% if u.username == current_user %}
-              <span class="you-tag">you</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if u.role == 'admin' %}
-                <span class="role-badge role-admin">⚡ Admin</span>
-              {% else %}
-                <span class="role-badge role-user">● User</span>
-              {% endif %}
-            </td>
-            <td style="color:#a0917a;">{{ u.created_at }}</td>
-            <td>
-              {% if u.username != current_user %}
-              <form action="/users/delete/{{ u.id }}" method="post" style="display:inline;"
-                    onsubmit="return confirm('Delete user {{ u.username }}?')">
-                <button type="submit" class="btn btn-danger">🗑 Delete</button>
-              </form>
-              {% else %}
-              <span style="color:#a0917a; font-size:12px;">—</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      <!-- Add User Form -->
-      <div class="add-user-form">
-        <h4>➕ Add New User</h4>
-        <form action="/users/add" method="post">
-          <div class="add-user-grid">
-            <div class="form-group">
-              <label class="form-label">Username</label>
-              <input type="text" name="username" placeholder="e.g. john" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Password</label>
-              <input type="password" name="password" placeholder="Set a password" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Role</label>
-              <select name="role">
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <button type="submit" class="btn btn-primary">Add →</button>
-            </div>
-          </div>
-        </form>
+        <div class="form-group">
+          <button type="submit" class="btn btn-primary">Update →</button>
+        </div>
       </div>
-    </div>
+    </form>
+  </div>
 
-    <!-- CHANGE YOUR PASSWORD -->
-    <div class="card">
-      <div class="section-title">Change Your Password</div>
-      <p class="section-desc">Update the password for your own account ({{ current_user }}).</p>
-      <form action="/users/change-password" method="post">
-        <div class="change-pwd-grid">
-          <div class="form-group">
-            <label class="form-label">Current Password</label>
-            <input type="password" name="old_password" placeholder="••••••••" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">New Password</label>
-            <input type="password" name="new_password" placeholder="••••••••" required>
-          </div>
-          <div class="form-group">
-            <button type="submit" class="btn btn-primary">Update →</button>
-          </div>
-        </div>
-      </form>
-    </div>
-
-  </main>
+</main>
 
 <script>
-const input = document.getElementById("followupDays");
-const helper = document.getElementById("helperText");
+function toggleSidebar() {
+  document.querySelector(".sidebar").classList.toggle("open");
+  document.getElementById("sidebarOverlay").classList.toggle("open");
+}
 
+const input  = document.getElementById("followupDays");
+const helper = document.getElementById("helperText");
 function updateHelper() {
   const v = parseInt(input.value) || 15;
   if (v === 1)       helper.innerText = "Feedback flagged after just 1 day.";
