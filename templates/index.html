@@ -124,10 +124,12 @@ input[name="priority"]{display:none}
 .drop-zone-text{font-size:14px;font-weight:700;color:var(--text-muted)}
 .drop-zone-sub{font-size:12px;color:var(--text-dim);font-weight:600;margin-top:4px}
 .drop-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.img-preview-wrap{margin-top:14px;position:relative;display:inline-block}
-.img-preview{max-width:100%;max-height:200px;border-radius:var(--radius-sm);border:1.5px solid var(--border);display:block}
-.img-remove{position:absolute;top:-8px;right:-8px;background:var(--danger);color:white;border:none;
-  border-radius:50%;width:24px;height:24px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:800}
+.img-preview-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.preview-item{position:relative;width:88px;height:88px}
+.preview-item img{width:88px;height:88px;object-fit:cover;border-radius:var(--radius-sm);border:1.5px solid var(--border);display:block}
+.preview-item .remove-btn{position:absolute;top:-6px;right:-6px;width:20px;height:20px;
+  background:var(--danger);color:white;border:none;border-radius:50%;font-size:11px;font-weight:800;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
 
 /* Tom Select */
 .ts-wrapper .ts-control{background:var(--surface2)!important;border:1.5px solid var(--border)!important;
@@ -334,19 +336,16 @@ tbody tr.row-resolved{background:#f0f7f1;opacity:0.75}
         <audio id="audioPreview" controls style="display:none;margin-top:12px;width:100%;"></audio>
       </div>
 
-      <!-- IMAGE DRAG & DROP -->
+      <!-- IMAGE DRAG & DROP — MULTIPLE -->
       <div class="form-group">
-        <label class="form-label">Attach Image <span>(optional — drag & drop or click)</span></label>
+        <label class="form-label">Attach Images <span>(optional — up to 10 images)</span></label>
         <div class="drop-zone" id="dropZone">
           <div class="drop-zone-icon">🖼️</div>
-          <div class="drop-zone-text">Drop image here or click to browse</div>
-          <div class="drop-zone-sub">JPG, PNG, WEBP — max 10MB</div>
-          <input type="file" name="image" id="imageFile" accept="image/*">
+          <div class="drop-zone-text">Drop images here or click to browse</div>
+          <div class="drop-zone-sub">JPG, PNG, WEBP — select multiple at once</div>
+          <input type="file" name="images" id="imageFile" accept="image/*" multiple>
         </div>
-        <div class="img-preview-wrap" id="imgPreviewWrap" style="display:none;">
-          <img id="imgPreview" class="img-preview" src="" alt="Preview">
-          <button type="button" class="img-remove" onclick="removeImage()">✕</button>
-        </div>
+        <div class="img-preview-grid" id="imgPreviewGrid"></div>
       </div>
 
       <button type="submit" class="btn btn-submit">Send Feedback via WhatsApp →</button>
@@ -404,7 +403,11 @@ tbody tr.row-resolved{background:#f0f7f1;opacity:0.75}
             </td>
             <td>
               {% if f.image_url %}
-                <img src="{{f.image_url}}" class="thumb-img" onclick="openLightbox('{{f.image_url}}')" alt="attachment">
+                {% for img_url in f.image_url.split(',') %}
+                  {% if img_url %}
+                    <img src="{{img_url}}" class="thumb-img" onclick="openLightbox('{{img_url}}')" alt="img" style="margin-right:4px;">
+                  {% endif %}
+                {% endfor %}
               {% else %}
                 <span class="no-voice">—</span>
               {% endif %}
@@ -524,33 +527,54 @@ recordBtn.onclick=async()=>{
 };
 stopBtn.onclick=()=>{mediaRecorder.stop();recordBtn.disabled=false;stopBtn.disabled=true};
 
-// IMAGE DRAG & DROP
+// IMAGE DRAG & DROP — MULTIPLE
 const dropZone=document.getElementById("dropZone");
 const imageFile=document.getElementById("imageFile");
-const imgPreviewWrap=document.getElementById("imgPreviewWrap");
-const imgPreview=document.getElementById("imgPreview");
+const previewGrid=document.getElementById("imgPreviewGrid");
+let selectedFiles=[];
 
-function showImagePreview(file){
-  if(!file||!file.type.startsWith("image/")) return;
-  const reader=new FileReader();
-  reader.onload=e=>{imgPreview.src=e.target.result;imgPreviewWrap.style.display="inline-block";dropZone.style.display="none"};
-  reader.readAsDataURL(file);
-}
-function removeImage(){
-  imageFile.value=""; imgPreview.src="";
-  imgPreviewWrap.style.display="none"; dropZone.style.display="block";
-}
-imageFile.addEventListener("change",()=>{if(imageFile.files[0]) showImagePreview(imageFile.files[0])});
 dropZone.addEventListener("dragover",e=>{e.preventDefault();dropZone.classList.add("drag-over")});
 dropZone.addEventListener("dragleave",()=>dropZone.classList.remove("drag-over"));
 dropZone.addEventListener("drop",e=>{
   e.preventDefault(); dropZone.classList.remove("drag-over");
-  const file=e.dataTransfer.files[0];
-  if(file&&file.type.startsWith("image/")){
-    const dt=new DataTransfer(); dt.items.add(file); imageFile.files=dt.files;
-    showImagePreview(file);
-  }
+  addFiles(Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith("image/")));
 });
+imageFile.addEventListener("change",()=>addFiles(Array.from(imageFile.files)));
+
+function addFiles(newFiles){
+  newFiles.forEach(f=>{if(selectedFiles.length<10) selectedFiles.push(f)});
+  updatePreview(); updateFileInput();
+}
+function removeFile(i){
+  selectedFiles.splice(i,1); updatePreview(); updateFileInput();
+}
+function updatePreview(){
+  previewGrid.innerHTML="";
+  selectedFiles.forEach((file,i)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const item=document.createElement("div");
+      item.className="preview-item";
+      item.innerHTML=`<img src="${e.target.result}" alt="preview"><button type="button" class="remove-btn" onclick="removeFile(${i})">✕</button>`;
+      previewGrid.appendChild(item);
+    };
+    reader.readAsDataURL(file);
+  });
+  const txt=dropZone.querySelector(".drop-zone-text");
+  const ico=dropZone.querySelector(".drop-zone-icon");
+  if(selectedFiles.length>0){
+    txt.innerText=selectedFiles.length+" image"+(selectedFiles.length>1?"s":"")+" selected";
+    ico.innerText="✔";
+  }else{
+    txt.innerText="Drop images here or click to browse";
+    ico.innerText="🖼️";
+  }
+}
+function updateFileInput(){
+  const dt=new DataTransfer();
+  selectedFiles.forEach(f=>dt.items.add(f));
+  imageFile.files=dt.files;
+}
 
 // IMAGE LIGHTBOX
 function openLightbox(url){document.getElementById("lightboxImg").src=url;document.getElementById("lightbox").classList.add("open")}

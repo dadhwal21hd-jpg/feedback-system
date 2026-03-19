@@ -15,6 +15,7 @@ import logging
 import hashlib
 from datetime import datetime
 import werkzeug.utils
+from typing import List
 import cloudinary
 import cloudinary.uploader
 
@@ -483,7 +484,7 @@ async def submit_feedback(
     priority:      str        = Form("Medium"),
     followup_days: int        = Form(15),
     voice:         UploadFile = File(None),
-    image:         UploadFile = File(None)
+    images:        List[UploadFile] = File(None)
 ):
     redir = require_login(request)
     if redir: return redir
@@ -508,13 +509,17 @@ async def submit_feedback(
         with open(voice_path, "wb") as buf:
             shutil.copyfileobj(voice.file, buf)
 
-    # Handle image upload to Cloudinary
-    if image and image.filename:
-        image_bytes = await image.read()
-        safe_name   = werkzeug.utils.secure_filename(image.filename) or "image.jpg"
-        url, pub_id = upload_to_cloudinary(image_bytes, safe_name, folder="feedflow/feedback")
-        if url:
-            image_url = url
+    # Handle multiple image uploads to Cloudinary
+    image_urls = []
+    if images:
+        for image in images:
+            if image and image.filename:
+                image_bytes = await image.read()
+                safe_name   = werkzeug.utils.secure_filename(image.filename) or "image.jpg"
+                url, pub_id = upload_to_cloudinary(image_bytes, safe_name, folder="feedflow/feedback")
+                if url:
+                    image_urls.append(url)
+    image_url = ",".join(image_urls)
 
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -539,8 +544,8 @@ async def submit_feedback(
     if voice_path:
         send_whatsapp_voice(phone, f"{BASE_URL}/{voice_path}")
 
-    if image_url:
-        send_whatsapp_image(phone, image_url, caption=f"📎 Image attached to feedback from {submitted_by}")
+    for url in image_urls:
+        send_whatsapp_image(phone, url, caption=f"📎 Image attached to feedback from {submitted_by}")
 
     return RedirectResponse("/", status_code=303)
 
